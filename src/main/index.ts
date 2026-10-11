@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, watch, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { openDb, type DB } from './db'
+import { basename, join } from 'node:path'
+import { DATA_DIR, openDb, type DB } from './db'
+import { EVENTS_FILE, pruneNeeds, readEvents, writeHookScript } from './events'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
@@ -27,7 +28,10 @@ function projectFor(cwd: string) {
 }
 
 function state() {
-  return buildState(db, readLive(), listHosted(), projectFor, !!TMUX)
+  const live = readLive()
+  const needs = readEvents()
+  pruneNeeds(new Set(live.keys()))
+  return buildState(db, live, needs, listHosted(), projectFor, !!TMUX)
 }
 
 function send(channel: string, ...args: unknown[]): void {
@@ -35,7 +39,11 @@ function send(channel: string, ...args: unknown[]): void {
 }
 
 function pushState(): void {
-  send('state:changed', state())
+  const s = state()
+  // The Dock badge counts sessions waiting on you, so you can see it from anywhere.
+  const waiting = s.projects.reduce((n, p) => n + p.sessions.filter((x) => x.status === 'needs').length, 0)
+  app.dock?.setBadge(waiting ? String(waiting) : '')
+  send('state:changed', s)
 }
 
 const waitForExit = async (pid: number, ms: number) => {
@@ -142,6 +150,7 @@ app.whenReady().then(() => {
   }
 
   initTmux()
+  writeHookScript()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
@@ -240,10 +249,15 @@ app.whenReady().then(() => {
   try {
     watch(CLAUDE_SESSIONS, () => refreshSoon(false))
   } catch {}
+  // Hooks append here the moment Claude asks for permission or a question, so react quickly.
+  try {
+    watch(DATA_DIR, (_ev, f) => f === basename(EVENTS_FILE) && refreshSoon(false))
+  } catch {}
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)
 
   createWindow()
+  pushState()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 

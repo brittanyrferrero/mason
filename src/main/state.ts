@@ -1,4 +1,5 @@
 import type { DB } from './db'
+import type { Need } from './events'
 import type { LiveInfo } from './live'
 import type { Hosted } from './tmux'
 
@@ -53,6 +54,7 @@ type Row = {
 export function buildState(
   db: DB,
   live: Map<string, LiveInfo>,
+  needs: Map<string, Need>,
   hosted: Hosted[],
   projectFor: (cwd: string) => { id: number; name: string },
   canHost: boolean
@@ -93,11 +95,12 @@ export function buildState(
     }
     const host = (l.tty && hostByTty.get(l.tty)) || null
     if (host) claimed.add(host)
+    const need = needs.get(r.id)
     add(r.project_id, r.project, {
       id: r.id,
       title: title(r),
-      now: oneLine(r.last_text) || oneLine(r.last_prompt),
-      status: l.status,
+      now: need?.message ?? (oneLine(r.last_text) || oneLine(r.last_prompt)),
+      status: need ? 'needs' : l.status,
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
       host
@@ -110,7 +113,8 @@ export function buildState(
     const host = (l.tty && hostByTty.get(l.tty)) || null
     if (host) claimed.add(host)
     const p = projectFor(l.cwd)
-    add(p.id, p.name, { id, title: 'New session', now: 'Say hi to get started', status: l.status, branch: null, lastActivity: Date.now(), host })
+    const need = needs.get(id)
+    add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host })
   }
   // Mason shells where Claude isn't running (just started, or you typed /exit).
   for (const h of hosted) {
@@ -135,5 +139,8 @@ export function buildState(
     )
     .all() as AppState['ideas']
 
-  return { projects: [...byProject.values()], paused, ideas, canHost }
+  // Anything waiting on you comes first in its project.
+  const projects = [...byProject.values()]
+  for (const p of projects) p.sessions.sort((a, b) => Number(b.status === 'needs') - Number(a.status === 'needs'))
+  return { projects, paused, ideas, canHost }
 }
