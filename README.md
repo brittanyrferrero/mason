@@ -22,6 +22,13 @@ reattaches next time. Escape hatch from any Terminal: `tmux -L mason ls`, then `
 Sessions started in a normal Terminal still show up (marked "in Terminal"). Clicking one brings its Terminal
 window forward; "Move here" stops it there and resumes the same conversation inside Mason.
 
+## "Waiting on you"
+
+`node scripts/hooks.mjs install` adds Claude Code hooks to `~/.claude/settings.json` (backup in `~/.mason/backups/`).
+They run `~/.mason/hook.sh`, which appends one short line per event to `~/.mason/events.jsonl` — no network.
+Permission prompts and AskUserQuestion turn a session coral, sort it first, and badge the Dock.
+`node scripts/hooks.mjs uninstall` removes exactly those entries.
+
 ## Where things live
 
 - `src/main/` — the privileged side: reads `~/.claude/projects/**/*.jsonl` (transcripts) and `~/.claude/sessions/*.json` (which sessions are running, busy or idle), and keeps Mason's own data in `~/.mason/mason.db`.
@@ -40,5 +47,5 @@ npx electron-vite build
 
 ## Status
 
-Step 2 of 5: live sessions inside Mason (Open tab, + New session, Resume, Move here, End), plus the Projects list with busy/idle dots.
-Next: hooks for the "waiting on you" state and the Dock badge; then /stash, /pause, notes and summaries.
+Step 3 of 5: live sessions inside Mason, busy/idle/waiting dots, Dock badge.
+Next: /stash, /pause, notes, summaries and auto-handoffs.
