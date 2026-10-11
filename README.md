@@ -1,4 +1,4 @@
-# Sidecar
+# Mason
 
 One quiet place for all your Claude Code sessions: what each one is doing, what's waiting on you, and where you left off.
 
@@ -8,23 +8,23 @@ A local macOS desktop app (Electron). It has no network port and nothing leaves 
 
 ```sh
 npm install      # once (also needs: brew install tmux)
-npm run dist     # build Sidecar.app into dist/mac-arm64/, then copy it to ~/Applications
+npm run dist     # build Mason.app into dist/mac-arm64/, then copy it to ~/Applications
 npm start        # run from source without packaging
 npm run dev      # hot-reloading dev mode while working on the UI
 ```
 
 ## How sessions work
 
-Sessions you start or resume in Sidecar run inside a private, invisible tmux server (`tmux -L sidecar`).
-Closing a window in the Open tab, or quitting Sidecar, only detaches; Claude keeps running and Sidecar
-reattaches next time. Escape hatch from any Terminal: `tmux -L sidecar ls`, then `tmux -L sidecar attach -t sc-xxxxxxxx`.
+Sessions you start or resume in Mason run inside a private, invisible tmux server (`tmux -L mason`).
+Closing a window in the Open tab, or quitting Mason, only detaches; Claude keeps running and Mason
+reattaches next time. Escape hatch from any Terminal: `tmux -L mason ls`, then `tmux -L mason attach -t ms-xxxxxxxx`.
 
 Sessions started in a normal Terminal still show up (marked "in Terminal"). Clicking one brings its Terminal
-window forward; "Move here" stops it there and resumes the same conversation inside Sidecar.
+window forward; "Move here" stops it there and resumes the same conversation inside Mason.
 
 ## Where things live
 
-- `src/main/` — the privileged side: reads `~/.claude/projects/**/*.jsonl` (transcripts) and `~/.claude/sessions/*.json` (which sessions are running, busy or idle), and keeps Sidecar's own data in `~/.sidecar/sidecar.db`.
+- `src/main/` — the privileged side: reads `~/.claude/projects/**/*.jsonl` (transcripts) and `~/.claude/sessions/*.json` (which sessions are running, busy or idle), and keeps Mason's own data in `~/.mason/mason.db`.
 - `src/preload/` — the tiny, fixed bridge the window is allowed to use.
 - `src/renderer/` — the Quiet list UI (React).
 
@@ -34,11 +34,11 @@ Sessions are grouped by the folder they started in; git worktrees roll up into o
 
 ```sh
 npx electron-vite build
-./node_modules/.bin/electron . --dump-state                 # print what Sidecar sees, then exit
+./node_modules/.bin/electron . --dump-state                 # print what Mason sees, then exit
 ./node_modules/.bin/electron . --snapshot=out.png --theme=dark  # render off-screen to a PNG
 ```
 
 ## Status
 
-Step 2 of 5: live sessions inside Sidecar (Open tab, + New session, Resume, Move here, End), plus the Projects list with busy/idle dots.
+Step 2 of 5: live sessions inside Mason (Open tab, + New session, Resume, Move here, End), plus the Projects list with busy/idle dots.
 Next: hooks for the "waiting on you" state and the Dock badge; then /stash, /pause, notes and summaries.

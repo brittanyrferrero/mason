@@ -4,13 +4,13 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DATA_DIR } from './db'
 
-// Sidecar runs its own private tmux server ("-L sidecar"), separate from any tmux you use yourself.
-// tmux keeps sessions alive when Sidecar's window closes or the app quits; Sidecar just attaches to them.
+// Mason runs its own private tmux server ("-L mason"), separate from any tmux you use yourself.
+// tmux keeps sessions alive when Mason's window closes or the app quits; Mason just attaches to them.
 export const TMUX = ['/opt/homebrew/bin/tmux', '/usr/local/bin/tmux', '/usr/bin/tmux'].find(existsSync) ?? null
-const SOCKET = 'sidecar'
+const SOCKET = 'mason'
 const CONF = join(DATA_DIR, 'tmux.conf')
 
-const CONF_TEXT = `# Written by Sidecar. Invisible tmux: no status bar, no prefix key, so every keystroke goes to Claude.
+const CONF_TEXT = `# Written by Mason. Invisible tmux: no status bar, no prefix key, so every keystroke goes to Claude.
 set -g status off
 set -g prefix None
 unbind-key -a
@@ -25,10 +25,10 @@ set -g aggressive-resize on
 set -g set-titles off
 `
 
-export const NAME_RE = /^sc-[0-9a-f]{8}$/
+export const NAME_RE = /^ms-[0-9a-f]{8}$/
 export const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-// Sidecar is often launched from the Dock with a bare environment; tmux and the shells it starts need a sane PATH,
+// Mason is often launched from the Dock with a bare environment; tmux and the shells it starts need a sane PATH,
 // and should not inherit Electron's own variables.
 export function cleanEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
@@ -72,7 +72,7 @@ export function listHosted(): Hosted[] {
 // If Claude exits, the shell stays, just like a Terminal tab.
 export function startSession(cwd: string, resumeId?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
-  const name = `sc-${randomBytes(4).toString('hex')}`
+  const name = `ms-${randomBytes(4).toString('hex')}`
   tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '120', '-y', '36'])
   tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}` : 'claude'])
   tmux(['send-keys', '-t', name, 'Enter'])

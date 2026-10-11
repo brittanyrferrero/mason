@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-// One live terminal, attached to a Sidecar session (a tmux session) through the main process.
+// One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
 export function Term({ name, focus }: { name: string; focus: boolean }) {
   const el = useRef<HTMLDivElement>(null)
@@ -30,13 +30,13 @@ export function Term({ name, focus }: { name: string; focus: boolean }) {
     termRef.current = t
 
     // Listen before attaching so the first screen redraw isn't missed.
-    const offData = window.sidecar.onTermData((n, d) => n === name && t.write(d))
-    const offExit = window.sidecar.onTermExit((n) => n === name && t.write('\r\n\x1b[2m[Detached]\x1b[0m\r\n'))
-    window.sidecar.attach(name, t.cols, t.rows).then((ok) => {
+    const offData = window.mason.onTermData((n, d) => n === name && t.write(d))
+    const offExit = window.mason.onTermExit((n) => n === name && t.write('\r\n\x1b[2m[Detached]\x1b[0m\r\n'))
+    window.mason.attach(name, t.cols, t.rows).then((ok) => {
       if (!ok) t.write('\x1b[2mThis session has ended.\x1b[0m\r\n')
     })
-    const input = t.onData((d) => window.sidecar.input(name, d))
-    const resize = t.onResize(({ cols, rows }) => window.sidecar.resize(name, cols, rows))
+    const input = t.onData((d) => window.mason.input(name, d))
+    const resize = t.onResize(({ cols, rows }) => window.mason.resize(name, cols, rows))
     const ro = new ResizeObserver(() => {
       try {
         fit.fit()
@@ -50,7 +50,7 @@ export function Term({ name, focus }: { name: string; focus: boolean }) {
       resize.dispose()
       offData()
       offExit()
-      window.sidecar.detach(name)
+      window.mason.detach(name)
       t.dispose()
       termRef.current = null
     }

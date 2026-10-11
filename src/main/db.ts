@@ -1,16 +1,28 @@
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const DATA_DIR = join(homedir(), '.sidecar')
+export const DATA_DIR = join(homedir(), '.mason')
 
 export type DB = Database.Database
 
-// Sidecar's own data lives outside the repo, in ~/.sidecar (owner-only).
+// Mason's own data lives outside the repo, in ~/.mason (owner-only).
+// This app used to be called Sidecar; carry its data over the first time Mason runs.
+function migrateFromSidecar(): void {
+  const old = join(homedir(), '.sidecar')
+  if (!existsSync(old) || existsSync(DATA_DIR)) return
+  renameSync(old, DATA_DIR)
+  for (const suffix of ['', '-wal', '-shm']) {
+    const from = join(DATA_DIR, `sidecar.db${suffix}`)
+    if (existsSync(from)) renameSync(from, join(DATA_DIR, `mason.db${suffix}`))
+  }
+}
+
 export function openDb(): DB {
+  migrateFromSidecar()
   mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 })
-  const db = new Database(join(DATA_DIR, 'sidecar.db'))
+  const db = new Database(join(DATA_DIR, 'mason.db'))
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(`

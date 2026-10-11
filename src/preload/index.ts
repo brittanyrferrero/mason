@@ -33,6 +33,6 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('sidecar', api)
+contextBridge.exposeInMainWorld('mason', api)
 
-export type SidecarApi = typeof api
+export type MasonApi = typeof api

@@ -1,6 +1,6 @@
 {
-  "name": "sidecar",
-  "productName": "Sidecar",
+  "name": "mason",
+  "productName": "Mason",
   "version": "0.1.0",
   "private": true,
   "description": "One quiet place for all your Claude Code sessions.",
@@ -36,8 +36,8 @@
     "vite": "7.3.7"
   },
   "build": {
-    "appId": "local.brittany.sidecar",
-    "productName": "Sidecar",
+    "appId": "local.brittany.mason",
+    "productName": "Mason",
     "directories": {
       "buildResources": "build",
       "output": "dist"

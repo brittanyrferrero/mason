@@ -5,13 +5,13 @@ import type { Hosted } from './tmux'
 export type SessionStatus = 'working' | 'needs' | 'idle'
 
 export type SessionView = {
-  id: string // Claude session id, or "tmux:<name>" for a Sidecar shell where Claude isn't running (yet)
+  id: string // Claude session id, or "tmux:<name>" for a Mason shell where Claude isn't running (yet)
   title: string
   now: string
   status: SessionStatus
   branch: string | null
   lastActivity: number
-  host: string | null // tmux session name when it lives inside Sidecar; null when it's in a Terminal window
+  host: string | null // tmux session name when it lives inside Mason; null when it's in a Terminal window
 }
 
 export type PausedView = { id: string; title: string; project: string; pickUp: string; lastActivity: number }
@@ -112,7 +112,7 @@ export function buildState(
     const p = projectFor(l.cwd)
     add(p.id, p.name, { id, title: 'New session', now: 'Say hi to get started', status: l.status, branch: null, lastActivity: Date.now(), host })
   }
-  // Sidecar shells where Claude isn't running (just started, or you typed /exit).
+  // Mason shells where Claude isn't running (just started, or you typed /exit).
   for (const h of hosted) {
     if (claimed.has(h.name)) continue
     // Usually Claude is starting or waiting on its first question (like "trust this folder?").

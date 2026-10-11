@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppState, SessionView } from '../../main/state'
-import type { SidecarApi } from '../../preload'
+import type { MasonApi } from '../../preload'
 import { Term } from './Term'
 
 declare global {
   interface Window {
-    sidecar: SidecarApi
+    mason: MasonApi
   }
 }
 
@@ -82,8 +82,8 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(() => stored('theme', 'auto'))
 
   useEffect(() => {
-    window.sidecar.getState().then((s) => s && setState(s as AppState))
-    return window.sidecar.onState((s) => setState(s as AppState))
+    window.mason.getState().then((s) => s && setState(s as AppState))
+    return window.mason.onState((s) => setState(s as AppState))
   }, [])
 
   useEffect(() => {
@@ -130,22 +130,22 @@ export function App() {
   const open = async (s: SessionView) => {
     setCursor(s.id)
     if (s.host) return showHosts([s.host])
-    const r = await window.sidecar.open(s.id)
+    const r = await window.mason.open(s.id)
     if (r.host) showHosts([r.host])
     else flashRow(s.id, r.ok ? { text: 'Brought its Terminal window to the front ✓', tone: 'ok' } : { text: 'Couldn’t find its Terminal window', tone: 'muted' })
   }
   const openAll = (sessions: SessionView[]) => showHosts(sessions.flatMap((s) => (s.host ? [s.host] : [])))
   const handle = (r: { host?: string; error?: string }) => (r.host ? showHosts([r.host]) : r.error && flashNote({ text: r.error, tone: 'muted' }))
-  const newSession = async (projectId: number) => handle(await window.sidecar.newSession(projectId))
-  const resume = async (id: string) => handle(await window.sidecar.resume(id))
+  const newSession = async (projectId: number) => handle(await window.mason.newSession(projectId))
+  const resume = async (id: string) => handle(await window.mason.resume(id))
   const move = async (id: string) => {
-    flashRow(id, { text: 'Moving into Sidecar…', tone: 'muted' })
-    handle(await window.sidecar.move(id))
+    flashRow(id, { text: 'Moving into Mason…', tone: 'muted' })
+    handle(await window.mason.move(id))
   }
   const end = async (s: SessionView) => {
     setConfirming(null)
     if (s.host) setOpenHosts((hs) => hs.filter((h) => h !== s.host))
-    await window.sidecar.end(s.id)
+    await window.mason.end(s.id)
     if (!s.id.startsWith('tmux:')) flashNote({ text: `Ended “${s.title}”. It’s in paused if you want it back.`, tone: 'muted' })
   }
 
@@ -279,7 +279,7 @@ export function App() {
             {state.projects.map((p) => {
               const waiting = p.sessions.filter((s) => s.status === 'needs').length
               const moving = p.sessions.some((s) => s.status === 'working')
-              const inSidecar = p.sessions.filter((s) => s.host)
+              const inMason = p.sessions.filter((s) => s.host)
               return (
                 <details key={p.id} className="proj" open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
                   <summary>
@@ -302,9 +302,9 @@ export function App() {
                       <button className="link" type="button" onClick={() => newSession(p.id)}>
                         + New session
                       </button>
-                      {inSidecar.length > 1 && (
-                        <button className="link" type="button" onClick={() => openAll(inSidecar)}>
-                          Open all {inSidecar.length}
+                      {inMason.length > 1 && (
+                        <button className="link" type="button" onClick={() => openAll(inMason)}>
+                          Open all {inMason.length}
                         </button>
                       )}
                     </div>
@@ -389,10 +389,10 @@ export function App() {
           </div>
         )}
 
-        {state && !state.canHost && <p className="note muted">Install tmux (brew install tmux) to open sessions inside Sidecar.</p>}
+        {state && !state.canHost && <p className="note muted">Install tmux (brew install tmux) to open sessions inside Mason.</p>}
 
         <footer className="meta">
-          <span>Sidecar 0.2</span>
+          <span>Mason 0.3</span>
           <span className="theme" role="group" aria-label="Theme">
             {(['auto', 'light', 'dark'] as Theme[]).map((t) => (
               <button key={t} type="button" aria-pressed={theme === t} onClick={() => setTheme(t)}>
@@ -446,7 +446,7 @@ function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onCo
         ) : (
           <span className="acts">
             {inTerminal && canHost && (
-              <button type="button" onClick={onMove} title="Stop it in Terminal and continue the same conversation inside Sidecar">
+              <button type="button" onClick={onMove} title="Stop it in Terminal and continue the same conversation inside Mason">
                 Move here
               </button>
             )}

@@ -65,7 +65,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 420,
     minHeight: 400,
-    title: 'Sidecar',
+    title: 'Mason',
     titleBarStyle: 'hiddenInset',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#141416' : '#f7f7f5',
     show: false,
@@ -112,7 +112,7 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-// Developer checks run alongside a normal Sidecar, so they skip the one-copy-only rule.
+// Developer checks run alongside a normal Mason, so they skip the one-copy-only rule.
 const DEV_CHECK = process.argv.some((a) => a === '--dump-state' || a.startsWith('--snapshot='))
 if (!DEV_CHECK && !app.requestSingleInstanceLock()) app.quit()
 
@@ -135,7 +135,7 @@ app.whenReady().then(() => {
   db = openDb()
   ingestAll(db)
 
-  // Developer check: print what Sidecar sees and exit, without opening a window.
+  // Developer check: print what Mason sees and exit, without opening a window.
   if (process.argv.includes('--dump-state')) {
     process.stdout.write(JSON.stringify(state(), null, 2) + '\n', () => app.exit(0))
     return
@@ -144,7 +144,7 @@ app.whenReady().then(() => {
   initTmux()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
-  // Open: a session inside Sidecar opens in the Open tab; one in a Terminal window gets brought to the front.
+  // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
   ipcMain.handle('session:open', async (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string') return { ok: false }
     if (id.startsWith('tmux:')) return { host: id.slice(5) }
@@ -155,7 +155,7 @@ app.whenReady().then(() => {
     return { ok: await focusTerminalTab(live.tty) }
   })
 
-  // New Claude session in a project's folder, hosted inside Sidecar.
+  // New Claude session in a project's folder, hosted inside Mason.
   ipcMain.handle('session:new', (e, projectId: unknown) => {
     if (!trusted(e) || typeof projectId !== 'number') return { error: 'bad request' }
     const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(projectId) as { root: string } | undefined
@@ -165,7 +165,7 @@ app.whenReady().then(() => {
     return { host }
   })
 
-  // Pick a closed session back up, inside Sidecar.
+  // Pick a closed session back up, inside Mason.
   ipcMain.handle('session:resume', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id)) return { error: 'bad request' }
     if (readLive().has(id)) return { error: 'That session is already running.' }
@@ -176,7 +176,7 @@ app.whenReady().then(() => {
     return { host }
   })
 
-  // Move a session that's running in a Terminal window into Sidecar: stop it there, resume the same conversation here.
+  // Move a session that's running in a Terminal window into Mason: stop it there, resume the same conversation here.
   ipcMain.handle('session:move', async (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id)) return { error: 'bad request' }
     const live = readLive().get(id)
@@ -189,7 +189,7 @@ app.whenReady().then(() => {
     return { host }
   })
 
-  // End: close a Sidecar session, or stop Claude in a Terminal window (the window itself stays).
+  // End: close a Mason session, or stop Claude in a Terminal window (the window itself stays).
   ipcMain.handle('session:end', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string') return false
     if (id.startsWith('tmux:')) {
@@ -247,10 +247,10 @@ app.whenReady().then(() => {
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 
-// Quitting Sidecar only detaches; your sessions keep running in tmux and reappear next launch.
+// Quitting Mason only detaches; your sessions keep running in tmux and reappear next launch.
 app.on('before-quit', () => term.detachAll())
 
-// Sidecar is a place you keep open; closing the window on macOS leaves it in the Dock.
+// Mason is a place you keep open; closing the window on macOS leaves it in the Dock.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
