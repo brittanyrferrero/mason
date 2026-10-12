@@ -48,4 +48,4 @@ npx electron-vite build
 ## Status
 
 Step 3 of 5: live sessions inside Mason, busy/idle/waiting dots, Dock badge.
-Next: /stash, /pause, notes, summaries and auto-handoffs.
+Next: /stash, /pause, notes, summaries and auto-handoffs. The full plan is in [ROADMAP.md](ROADMAP.md).

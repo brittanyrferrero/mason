@@ -20,6 +20,7 @@ const api = {
   attach: (name: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('term:attach', name, cols, rows),
   input: (name: string, data: string) => ipcRenderer.send('term:input', name, data),
   resize: (name: string, cols: number, rows: number) => ipcRenderer.send('term:resize', name, cols, rows),
+  scroll: (name: string, lines: number) => ipcRenderer.send('term:scroll', name, lines),
   detach: (name: string) => ipcRenderer.send('term:detach', name),
   onTermData: (cb: (name: string, data: string) => void) => {
     const listener = (_e: IpcRendererEvent, name: string, data: string) => cb(name, data)

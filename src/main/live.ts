@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 export const CLAUDE_SESSIONS = join(homedir(), '.claude', 'sessions')
 
-export type LiveInfo = { pid: number; status: 'working' | 'idle'; name?: string; tty?: string; cwd?: string }
+export type LiveInfo = { pid: number; status: 'working' | 'idle'; name?: string; tty?: string; cwd?: string; copies: number }
 
 function alive(pid: number): boolean {
   try {
@@ -31,7 +31,10 @@ export function readLive(): Map<string, LiveInfo> {
     try {
       const d = JSON.parse(readFileSync(join(CLAUDE_SESSIONS, f), 'utf8'))
       if (typeof d.sessionId !== 'string' || typeof d.pid !== 'number' || !alive(d.pid)) continue
-      live.set(d.sessionId, { pid: d.pid, status: d.status === 'busy' ? 'working' : 'idle', name: d.name, cwd: d.cwd })
+      // The same conversation can be resumed in two places at once; count the copies so nothing acts on it blindly.
+      const prev = live.get(d.sessionId)
+      if (prev) prev.copies++
+      else live.set(d.sessionId, { pid: d.pid, status: d.status === 'busy' ? 'working' : 'idle', name: d.name, cwd: d.cwd, copies: 1 })
     } catch {
       // half-written file; next pass will catch it
     }

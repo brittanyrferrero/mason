@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, SessionView } from '../../main/state'
 import type { MasonApi } from '../../preload'
 import { Term } from './Term'
@@ -11,6 +11,8 @@ declare global {
 
 type Theme = 'auto' | 'light' | 'dark'
 type View = 'projects' | 'open'
+type Sort = 'project' | 'waiting' | 'recent' | 'custom'
+type Layout = 'grid' | 'side' | 'stack' | 'one'
 type Note = { text: string; tone: 'ok' | 'muted' }
 
 // Small per-device preferences. Wrapped because storage can be unavailable.
@@ -54,15 +56,52 @@ const KeyboardIcon = () => (
   </svg>
 )
 
-const SHORTCUTS: [string, string[]][] = [
-  ['Projects tab', ['⌘', '1']],
-  ['Open tab', ['⌘', '2']],
-  ['Move', ['↑', '↓']],
-  ['Open', ['↵']],
-  ['Open all', ['A']],
-  ['Shush', ['S']],
-  ['Show this', ['?']]
+const SHORTCUTS: [string, [string, string[]][]][] = [
+  [
+    'Anywhere',
+    [
+      ['Projects tab', ['⌘', '1']],
+      ['Open tab', ['⌘', '2']]
+    ]
+  ],
+  [
+    'Projects',
+    [
+      ['Move', ['↑', '↓']],
+      ['Open', ['↵']],
+      ['Open all', ['A']],
+      ['Shush', ['S']],
+      ['Show this', ['?']]
+    ]
+  ],
+  [
+    'Open tab',
+    [
+      ['Next window', ['⌘', ']']],
+      ['Previous window', ['⌘', '[']],
+      ['Move window later', ['⌘', '⇧', ']']],
+      ['Move window earlier', ['⌘', '⇧', '[']],
+      ['One at a time', ['⌘', '↵']],
+      ['Change layout', ['⌘', 'L']],
+      ['Change order', ['⌘', 'O']],
+      ['Hide window', ['⌘', '⇧', 'W']]
+    ]
+  ]
 ]
+
+const SORTS: [Sort, string][] = [
+  ['project', 'automatically'],
+  ['waiting', 'waiting first'],
+  ['recent', 'by recent activity'],
+  ['custom', 'by hand']
+]
+const LAYOUTS: [Layout, string][] = [
+  ['grid', 'in a grid'],
+  ['side', 'side by side'],
+  ['stack', 'stacked'],
+  ['one', 'one at a time']
+]
+const cycle = <T,>(list: [T, string][], cur: T): T => list[(list.findIndex(([v]) => v === cur) + 1) % list.length][0]
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -80,6 +119,20 @@ export function App() {
   const [foot, setFoot] = useState<'paused' | 'ideas' | null>(null)
   const [keysOpen, setKeysOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => stored('theme', 'auto'))
+  // How the Open tab is arranged. Custom order is whatever you last dragged or nudged.
+  const [sort, setSort] = useState<Sort>(() => stored('sort', 'project'))
+  const [layout, setLayout] = useState<Layout>(() => stored('openLayout', 'stack'))
+  const lastMulti = useRef<Layout>(layout === 'one' ? 'stack' : layout)
+  const [order, setOrder] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('order') ?? '[]')
+    } catch {
+      return []
+    }
+  })
+  const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [dropAt, setDropAt] = useState<{ host: string; after: boolean } | null>(null)
 
   useEffect(() => {
     window.mason.getState().then((s) => s && setState(s as AppState))
@@ -92,20 +145,30 @@ export function App() {
     store('theme', theme)
   }, [theme])
 
+  useEffect(() => store('sort', sort), [sort])
+  useEffect(() => {
+    store('openLayout', layout)
+    if (layout !== 'one') lastMulti.current = layout
+  }, [layout])
+  useEffect(() => store('order', JSON.stringify(order)), [order])
+
   useEffect(() => {
     store('shush', shushed ? 'on' : 'off')
     setClosed(new Set())
     setOpened(new Set())
+    if (shushed) setFoot(null)
   }, [shushed])
 
   const allSessions = useMemo(() => (state?.projects ?? []).flatMap((p) => p.sessions.map((s) => ({ s, project: p.name }))), [state])
   const hosted = allSessions.filter(({ s }) => s.host)
 
-  // Drop windows whose session has ended (give a just-started one a moment to show up).
+  // Drop windows whose session has ended. A just-started one isn't in the state yet, so only drop hosts we've seen.
+  const seenHosts = useRef(new Set<string>())
   useEffect(() => {
     if (!state) return
-    const alive = new Set(hosted.map(({ s }) => s.host))
-    setOpenHosts((hs) => hs.filter((h) => alive.has(h) || h === focusHost))
+    const alive = new Set(hosted.map(({ s }) => s.host!))
+    alive.forEach((h) => seenHosts.current.add(h))
+    setOpenHosts((hs) => hs.filter((h) => alive.has(h) || !seenHosts.current.has(h)))
   }, [state])
 
   const isOpen = (id: number) => (shushed ? opened.has(id) : !closed.has(id))
@@ -149,12 +212,76 @@ export function App() {
     if (!s.id.startsWith('tmux:')) flashNote({ text: `Ended “${s.title}”. It’s in paused if you want it back.`, tone: 'muted' })
   }
 
+  // Windows in the Open tab. "Project" keeps the same order as the list; the sorts are stable, so ties stay in it.
+  const windows = useMemo(() => {
+    const known = allSessions.filter(({ s }) => s.host && openHosts.includes(s.host))
+    const pending = openHosts
+      .filter((h) => !known.some(({ s }) => s.host === h))
+      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, last: Infinity }))
+    const list = [...known.map(({ s, project }) => ({ host: s.host!, project, title: s.title, needs: s.status === 'needs', last: s.lastActivity })), ...pending]
+    const rank = (h: string) => (order.includes(h) ? order.indexOf(h) : order.length + openHosts.indexOf(h))
+    if (sort === 'waiting') return list.sort((a, b) => Number(b.needs) - Number(a.needs))
+    if (sort === 'recent') return list.sort((a, b) => (b.last === a.last ? 0 : b.last > a.last ? 1 : -1))
+    if (sort === 'custom') return list.sort((a, b) => rank(a.host) - rank(b.host))
+    return list
+  }, [allSessions, openHosts, sort, order])
+
+  useEffect(() => {
+    if (view === 'open' && !windows.length) setView('projects')
+  }, [windows, view])
+
+  const one = layout === 'one'
+  const n = windows.length
+  const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, n) : n <= 1 ? 1 : n === 2 || n === 4 ? 2 : 3
+
+  const closeWindow = (host: string) => setOpenHosts((hs) => hs.filter((h) => h !== host))
+  const step = (dir: number) => {
+    const i = windows.findIndex((w) => w.host === focusHost)
+    setFocusHost(windows[(i < 0 ? 0 : i + dir + windows.length) % windows.length].host)
+  }
+  // Any manual arrangement becomes the custom order.
+  const arrange = (hosts: string[]) => {
+    setOrder(hosts)
+    setSort('custom')
+  }
+  const nudge = (dir: number) => {
+    const hosts = windows.map((w) => w.host)
+    const i = hosts.indexOf(focusHost ?? '')
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= hosts.length) return
+    ;[hosts[i], hosts[j]] = [hosts[j], hosts[i]]
+    arrange(hosts)
+  }
+  const dropOn = (target: string, after: boolean) => {
+    if (!dragging || dragging === target) return
+    const hosts = windows.map((w) => w.host).filter((h) => h !== dragging)
+    hosts.splice(hosts.indexOf(target) + (after ? 1 : 0), 0, dragging)
+    arrange(hosts)
+  }
+  const toggleOne = (host = focusHost ?? windows[0]?.host) => {
+    if (!host) return
+    setFocusHost(host)
+    setLayout((l) => (l === 'one' ? lastMulti.current : 'one'))
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && (e.key === '1' || e.key === '2')) {
         e.preventDefault()
         if (e.key === '2' && !openHosts.length) return
         return setView(e.key === '1' ? 'projects' : 'open')
+      }
+      if (view === 'open' && e.metaKey && windows.length) {
+        const c = e.code
+        if (c === 'BracketLeft' || c === 'BracketRight') {
+          e.preventDefault()
+          const dir = c === 'BracketRight' ? 1 : -1
+          return e.shiftKey ? nudge(dir) : step(dir)
+        }
+        if (c === 'Enter') return e.preventDefault(), toggleOne()
+        if (c === 'KeyL') return e.preventDefault(), setLayout((v) => cycle(LAYOUTS, v))
+        if (c === 'KeyO') return e.preventDefault(), setSort((v) => cycle(SORTS, v))
+        if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
       if (view === 'open' || e.metaKey || e.ctrlKey || e.altKey) return
@@ -176,7 +303,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visibleRows, cursor, view, openHosts, allSessions])
+  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout])
 
   useEffect(() => {
     if (!keysOpen) return
@@ -197,14 +324,6 @@ export function App() {
     shushed ? setOpened(flip) : setClosed(flip)
   }
 
-  // Windows in the Open tab, always in the same project order as the list.
-  const windows = useMemo(() => {
-    const known = allSessions.filter(({ s }) => s.host && openHosts.includes(s.host))
-    const pending = openHosts.filter((h) => !known.some(({ s }) => s.host === h)).map((h) => ({ host: h, project: '', title: 'Starting…' }))
-    return [...known.map(({ s, project }) => ({ host: s.host!, project, title: s.title })), ...pending]
-  }, [allSessions, openHosts])
-  const cols = windows.length <= 1 ? 1 : windows.length === 2 || windows.length === 4 ? 2 : 3
-
   return (
     <div className={`app view-${view}`}>
       <div className="dragbar" aria-hidden="true" />
@@ -220,15 +339,20 @@ export function App() {
         </button>
         {keysOpen && (
           <div className="keys-pop" role="dialog" aria-label="Keyboard shortcuts">
-            {SHORTCUTS.map(([label, keys]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <span>
-                  {keys.map((k) => (
-                    <kbd key={k}>{k}</kbd>
-                  ))}
-                </span>
-              </div>
+            {SHORTCUTS.map(([section, rows]) => (
+              <Fragment key={section}>
+                <h4>{section}</h4>
+                {rows.map(([label, keys]) => (
+                  <div key={label}>
+                    <span>{label}</span>
+                    <span>
+                      {keys.map((k, i) => (
+                        <kbd key={i}>{k}</kbd>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </Fragment>
             ))}
           </div>
         )}
@@ -236,21 +360,63 @@ export function App() {
 
       {/* Kept mounted (just hidden) so terminals don't reconnect every time you switch tabs. */}
       <section className="desk" hidden={view !== 'open'}>
-        <div className="wins" style={{ ['--cols' as string]: cols }}>
-          {windows.map((w) => (
-            <div className="win" key={w.host}>
-              <div className="win-bar">
-                <b>
-                  {w.project && <span className="wp">{w.project}</span>}
-                  {w.title}
-                </b>
-                <button className="x" type="button" aria-label="Close this window (the session keeps running)" title="Close window · session keeps running" onClick={() => setOpenHosts((hs) => hs.filter((h) => h !== w.host))}>
-                  ×
-                </button>
+        {n > 1 && (
+          <p className="desk-bar">
+            {n} sessions viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
+            <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
+          </p>
+        )}
+        <div className={`wins ${cols === 1 ? 'col1' : ''}`} style={{ ['--cols' as string]: cols }}>
+          {windows.map((w) => {
+            const focused = focusHost === w.host
+            const drop = dropAt?.host === w.host ? (dropAt.after ? 'drop-after' : 'drop-before') : ''
+            return (
+              <div
+                key={w.host}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${one && !focused ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
+                onFocusCapture={() => setFocusHost(w.host)}
+                onDragOver={(e) => {
+                  if (!dragging || dragging === w.host) return
+                  e.preventDefault()
+                  const r = e.currentTarget.getBoundingClientRect()
+                  const after = cols === 1 ? e.clientY > r.top + r.height / 2 : e.clientX > r.left + r.width / 2
+                  if (dropAt?.host !== w.host || dropAt.after !== after) setDropAt({ host: w.host, after })
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (dropAt?.host === w.host) dropOn(w.host, dropAt.after)
+                  setDragging(null)
+                  setDropAt(null)
+                }}
+              >
+                <div
+                  className="win-bar"
+                  draggable={!one && n > 1}
+                  title={one || n < 2 ? undefined : 'Drag to rearrange · double-click for one at a time'}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', w.title)
+                    setDragging(w.host)
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null)
+                    setDropAt(null)
+                  }}
+                  onDoubleClick={(e) => n > 1 && !(e.target as Element).closest('button') && toggleOne(w.host)}
+                >
+                  {w.needs && <span className="dot needs" title="Waiting on you" />}
+                  <b>
+                    {w.project && <span className="wp">{w.project}</span>}
+                    {w.title}
+                  </b>
+                  <button className="x" type="button" aria-label="Hide this window (the session keeps running)" title="Hide window · the session keeps running, reopen it from Projects (⌘⇧W)" onClick={() => closeWindow(w.host)}>
+                    –
+                  </button>
+                </div>
+                <Term name={w.host} focus={view === 'open' && focused} tick={tick} />
               </div>
-              <Term name={w.host} focus={view === 'open' && focusHost === w.host} />
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -421,6 +587,11 @@ type RowProps = {
 
 function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
+  const endHint = s.id.startsWith('tmux:')
+    ? 'Close this Mason shell (Claude isn’t running in it)'
+    : inTerminal
+      ? 'Stop Claude in its Terminal window. The window stays open, and the conversation goes to paused so you can resume it.'
+      : 'Stop this session. The conversation goes to paused so you can resume it.'
   return (
     <div className={`item ${cursor ? 'cursor' : ''}`}>
       <div className="row">
@@ -436,10 +607,10 @@ function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onCo
         {confirming ? (
           <span className="acts confirming">
             <span className="ask">End it?</span>
-            <button className="yes" type="button" onClick={onConfirmEnd}>
+            <button className="yes" type="button" onClick={onConfirmEnd} title={endHint}>
               End
             </button>
-            <button type="button" onClick={onCancelEnd}>
+            <button type="button" onClick={onCancelEnd} title="Keep it running">
               Cancel
             </button>
           </span>
@@ -450,12 +621,32 @@ function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onCo
                 Move here
               </button>
             )}
-            <button className="end" type="button" onClick={onEnd}>
+            <button className="end" type="button" onClick={onEnd} title={endHint}>
               End
             </button>
           </span>
         )}
       </div>
     </div>
+  )
+}
+
+// A dropdown that reads as part of a sentence: the current words and a small chevron, with the native
+// select laid invisibly on top so it sizes to the words, not to its longest option.
+function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <label className="pick">
+      {options.find(([v]) => v === value)?.[1]}
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}>
+        {options.map(([v, text]) => (
+          <option key={v} value={v}>
+            {text}
+          </option>
+        ))}
+      </select>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </label>
   )
 }

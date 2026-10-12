@@ -1,0 +1,54 @@
+# Mason roadmap
+
+Mason is one quiet place for every Claude Code session, built for an ADHD brain: it should hold the
+things your head drops (where you were, what you meant to do next, the idea you had mid-task) and stay
+calm until something actually needs you.
+
+Started from [termwall](https://claude.ai/artifact/Nfx7bhFvDoyfx1BK43cV1A) (a wall of Claude sessions
+behind a hotkey). Mason keeps that core and adds memory and focus.
+
+**Design rules**
+- Minimal and quiet. Options live in quiet dropdowns or keyboard shortcuts, not toolbars.
+- Only "waiting on you" is loud. Everything else is muted until you look.
+- Capturing a thought must take one keystroke and never pull you out of what you're doing.
+- Nothing is lost: ending, pausing, or quitting always leaves a breadcrumb you can pick back up.
+- Local only. The single exception is short summaries Claude writes (can be turned off).
+
+## Done
+
+- [x] Every session in one list, grouped by project, with busy / idle / waiting dots
+- [x] "Waiting on you" from hooks: coral, sorted first, Dock badge
+- [x] Sessions run inside Mason (invisible tmux) and survive closing the window or quitting
+- [x] Move a Terminal session into Mason; resume paused sessions; start new ones per project
+- [x] Shush: collapse everything except what you open on purpose
+- [x] Open tab: several sessions at once, stacked / side by side / grid / one at a time, drag to reorder, ⌘ shortcuts
+- [x] Scroll back through a session's history inside Mason
+
+## Now (in this order)
+
+- [ ] **Rename and pin.** Give a session your own name; pinned sessions float to the top of their project.
+- [ ] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
+      a two-line "where was I?" recap: what you were doing and the next step. Can be turned off.
+- [ ] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
+      session can pick up exactly where it left off. **/pause** inside Claude does this and stops the session;
+      the note shows on the paused list and you can edit it.
+- [ ] **Persistent notes.** A note on any session or project that survives ending, pausing, and restarts.
+      Shows as one muted line on the row; click to edit. Plus one free-floating scratchpad.
+
+## Next
+
+- [ ] **Quick capture.** A global hotkey opens a one-line box from any app; type, Enter, gone.
+      Lands in the inbox ("ideas saved") tagged with whatever session you were in.
+- [ ] **/stash** inside Claude: park a stray thought or side quest in Mason without derailing the session.
+- [ ] **Focus on one.** Mark a session as "now"; Mason dims the rest and keeps that one a keystroke away.
+- [ ] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
+- [ ] **Type to filter** the list by title, project, or note.
+
+Not doing: time cues ("working 40 min") and nudges about sessions waiting too long.
+
+## Later
+
+- [ ] Global hotkey to bring Mason forward from anywhere
+- [ ] Peek: enlarge a session over the list without opening it; answer a permission prompt from there
+- [ ] Reopen sessions after a Mac restart
+- [ ] Menu bar icon with the waiting count

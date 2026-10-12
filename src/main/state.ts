@@ -1,7 +1,7 @@
 import type { DB } from './db'
 import type { Need } from './events'
 import type { LiveInfo } from './live'
-import type { Hosted } from './tmux'
+import { peek, type Hosted } from './tmux'
 
 export type SessionStatus = 'working' | 'needs' | 'idle'
 
@@ -99,7 +99,7 @@ export function buildState(
     add(r.project_id, r.project, {
       id: r.id,
       title: title(r),
-      now: need?.message ?? (oneLine(r.last_text) || oneLine(r.last_prompt)),
+      now: l.copies > 1 ? `Running in ${l.copies} places at once` : (need?.message ?? (oneLine(r.last_text) || oneLine(r.last_prompt))),
       status: need ? 'needs' : l.status,
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
@@ -116,16 +116,17 @@ export function buildState(
     const need = needs.get(id)
     add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host })
   }
-  // Mason shells where Claude isn't running (just started, or you typed /exit).
+  // Mason shells where Claude isn't running: still starting, stuck on its first question, or exited.
   for (const h of hosted) {
     if (claimed.has(h.name)) continue
-    // Usually Claude is starting or waiting on its first question (like "trust this folder?").
     const p = projectFor(h.cwd)
+    const r = h.resume ? (db.prepare('SELECT ai_title, first_prompt FROM sessions WHERE id = ?').get(h.resume) as Pick<Row, 'ai_title' | 'first_prompt'> | undefined) : undefined
+    const seen = peek(h.name)
     add(p.id, p.name, {
       id: `tmux:${h.name}`,
-      title: 'New session',
-      now: 'Open it to get going',
-      status: 'idle',
+      title: (r && (r.ai_title || oneLine(r.first_prompt, 60))) || 'New session',
+      now: seen === 'trust' ? 'Asking whether to trust this folder' : seen === 'shell' ? 'Claude isn’t running here' : 'Starting Claude…',
+      status: seen === 'trust' ? 'needs' : 'idle',
       branch: null,
       lastActivity: h.created,
       host: h.name

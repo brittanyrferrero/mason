@@ -3,9 +3,12 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+// ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW'])
+
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
-export function Term({ name, focus }: { name: string; focus: boolean }) {
+export function Term({ name, focus, tick }: { name: string; focus: boolean; tick: number }) {
   const el = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
 
@@ -24,6 +27,19 @@ export function Term({ name, focus }: { name: string; focus: boolean }) {
     const fit = new FitAddon()
     t.loadAddon(fit)
     t.open(host)
+    t.attachCustomKeyEventHandler((e) => !(e.metaKey && APP_KEYS.has(e.code)))
+    // The history lives in tmux, not in xterm, so the wheel scrolls tmux. Trackpads send many small pixel deltas.
+    let wheel = 0
+    t.attachCustomWheelEventHandler((e) => {
+      e.preventDefault() // the page itself must not scroll too
+      wheel += e.deltaMode === 1 ? e.deltaY : e.deltaY / 20
+      const lines = Math.trunc(wheel)
+      if (lines) {
+        wheel -= lines
+        window.mason.scroll(name, lines)
+      }
+      return false
+    })
     try {
       fit.fit()
     } catch {}
@@ -58,7 +74,7 @@ export function Term({ name, focus }: { name: string; focus: boolean }) {
 
   useEffect(() => {
     if (focus) termRef.current?.focus()
-  }, [focus])
+  }, [focus, tick])
 
   return <div className="term" ref={el} onMouseDown={() => termRef.current?.focus()} />
 }

@@ -47,7 +47,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--go); outl
 .dragbar { position: fixed; inset: 0 0 auto 0; height: 36px; -webkit-app-region: drag; z-index: 0; }
 .tabs, .tabs * , .col { -webkit-app-region: no-drag; }
 
-.tabs { position: relative; z-index: 1; max-width: 560px; margin: 0 auto 26px; display: flex; gap: 4px; border-bottom: 1px solid var(--edge); }
+.tabs { position: relative; z-index: 1; margin: 0 0 26px; display: flex; gap: 4px; border-bottom: 1px solid var(--edge); }
 .tab { border: 0; background: none; padding: 8px 12px 10px; font-size: 15px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 8px; }
 .tab:hover:not(:disabled) { color: var(--ink); }
 .tab[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
@@ -141,7 +141,6 @@ details > summary::-webkit-details-marker { display: none; }
 .acts .yes, .acts .yes:hover { background: var(--wait); color: #fff; }
 .ask { font-size: 13.5px; padding: 6px 4px; }
 
-.app.view-open .tabs { max-width: none; margin-inline: 0; }
 .desk { height: calc(100vh - 44px - 74px - 16px); min-height: 300px; }
 .wins { height: 100%; display: grid; gap: 10px; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
 .win { background: #1c1c1e; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; min-width: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 10px 30px rgba(0, 0, 0, 0.18); }
@@ -153,3 +152,28 @@ details > summary::-webkit-details-marker { display: none; }
 .term { flex: 1; min-height: 0; padding: 6px 4px 4px 8px; user-select: text; }
 .term .xterm { height: 100%; }
 @media (max-width: 760px) { .wins { --cols: 1 !important; } }
+
+/* Open tab arranging: two quiet dropdowns, a focus ring, drag-to-reorder. */
+/* The Open tab fits the window exactly; only the terminals scroll. */
+body:has(.view-open) { overflow: hidden; }
+.desk { display: flex; flex-direction: column; gap: 10px; }
+.desk-bar { margin: -14px 0 0; text-align: right; font-size: 12.5px; color: var(--muted); }
+.pick { position: relative; display: inline-flex; align-items: center; gap: 3px; color: var(--ink-soft); font-weight: 500; border-bottom: 1px dotted var(--faint); cursor: pointer; }
+.pick:hover, .pick:focus-within { color: var(--ink); border-bottom-color: var(--muted); }
+.pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
+.pick svg { width: 11px; height: 11px; }
+.wins { flex: 1; min-height: 0; height: auto; }
+.win { position: relative; transition: opacity 0.15s; }
+.win.focused { box-shadow: 0 0 0 1.5px var(--muted), 0 10px 30px rgba(0, 0, 0, 0.18); }
+.win.gone { display: none; }
+.win.dragging { opacity: 0.4; }
+.win-bar[draggable='true'] { cursor: grab; }
+.win-bar .dot { width: 7px; height: 7px; }
+.win.drop-before::after, .win.drop-after::after { content: ''; position: absolute; z-index: 2; background: var(--go); border-radius: 2px; }
+.wins:not(.col1) .win.drop-before::after { left: 0; top: 0; bottom: 0; width: 3px; }
+.wins:not(.col1) .win.drop-after::after { right: 0; top: 0; bottom: 0; width: 3px; }
+.wins.col1 .win.drop-before::after { left: 0; right: 0; top: 0; height: 3px; }
+.wins.col1 .win.drop-after::after { left: 0; right: 0; bottom: 0; height: 3px; }
+.keys-pop { width: 260px; }
+.keys-pop h4 { margin: 6px 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+.keys-pop h4:first-child { margin-top: 0; }

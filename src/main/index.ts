@@ -9,7 +9,7 @@ import { projectIdFor } from './projects'
 import * as term from './pty'
 import { buildState } from './state'
 import { focusTerminalTab } from './terminal'
-import { endSession, initTmux, listHosted, NAME_RE, SESSION_ID_RE, startSession, TMUX } from './tmux'
+import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, TMUX, unscroll } from './tmux'
 
 let db: DB
 let win: BrowserWindow | null = null
@@ -178,6 +178,9 @@ app.whenReady().then(() => {
   ipcMain.handle('session:resume', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id)) return { error: 'bad request' }
     if (readLive().has(id)) return { error: 'That session is already running.' }
+    // Mason already has a shell for it (maybe Claude is still starting there): show that instead of starting another copy.
+    const shell = listHosted().find((h) => h.resume === id && peek(h.name) !== 'shell')
+    if (shell) return { host: shell.name }
     const s = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
     if (!s?.cwd || !existsSync(s.cwd)) return { error: 'Its folder no longer exists.' }
     const host = startSession(s.cwd, id)
@@ -191,6 +194,10 @@ app.whenReady().then(() => {
     const live = readLive().get(id)
     const cwd = live?.cwd ?? (db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string } | undefined)?.cwd
     if (!live || !cwd || !existsSync(cwd)) return { error: 'Couldn’t find that session.' }
+    if (live.copies > 1) return { error: 'That conversation is running in more than one place. End the extra copies first.' }
+    // Already inside Mason: just show it, never stop it.
+    const already = (live.tty ? listHosted().find((h) => h.tty === live.tty) : undefined) ?? listHosted().find((h) => h.resume === id && peek(h.name) !== 'shell')
+    if (already) return { host: already.name }
     process.kill(live.pid, 'SIGTERM')
     if (!(await waitForExit(live.pid, 6000))) return { error: 'It didn’t stop in time. Try again in a moment.' }
     const host = startSession(cwd, id)
@@ -233,7 +240,12 @@ app.whenReady().then(() => {
     )
   })
   ipcMain.on('term:input', (e, name: unknown, data: unknown) => {
-    if (trusted(e) && typeof name === 'string' && typeof data === 'string') term.write(name, data)
+    if (!trusted(e) || typeof name !== 'string' || typeof data !== 'string') return
+    unscroll(name)
+    term.write(name, data)
+  })
+  ipcMain.on('term:scroll', (e, name: unknown, lines: unknown) => {
+    if (trusted(e) && typeof name === 'string') scroll(name, Number(lines))
   })
   ipcMain.on('term:resize', (e, name: unknown, cols: unknown, rows: unknown) => {
     if (trusted(e) && typeof name === 'string') term.resize(name, Number(cols), Number(rows))

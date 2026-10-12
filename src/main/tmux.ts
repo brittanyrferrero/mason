@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -36,6 +36,9 @@ export function cleanEnv(): NodeJS.ProcessEnv {
   env.PATH = ['/opt/homebrew/bin', '/usr/local/bin', env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin'].join(':')
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
+  // Launched from the Dock there's no locale, and tmux then treats the terminal as plain ASCII: Claude's UI
+  // renders as underscores and list-panes mangles tabs. Ask for UTF-8 unless the user already chose a locale.
+  if (!env.LC_ALL && !env.LC_CTYPE && !env.LANG) env.LANG = 'en_US.UTF-8'
   delete env.TMUX
   return env
 }
@@ -53,16 +56,24 @@ export function initTmux(): void {
   writeFileSync(CONF, CONF_TEXT, { mode: 0o600 })
 }
 
-export type Hosted = { name: string; tty: string; cwd: string; created: number }
+// resume: the conversation Mason started this shell for, so it can be named before Claude is up (or after it exits).
+export type Hosted = { name: string; tty: string; cwd: string; created: number; resume?: string }
 
 export function listHosted(): Hosted[] {
   if (!TMUX) return []
   try {
-    return tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_tty}\t#{pane_current_path}\t#{session_created}'])
+    // Space-separated, path last: tmux can rewrite tabs in its output, and only the path can contain spaces.
+    return tmux(['list-panes', '-a', '-F', '#{session_name} #{pane_tty} #{session_created} r#{@mason_resume} #{pane_current_path}'])
       .split('\n')
-      .map((l) => l.split('\t'))
-      .filter(([name]) => NAME_RE.test(name ?? ''))
-      .map(([name, tty, cwd, created]) => ({ name, tty: tty.replace('/dev/', ''), cwd, created: Number(created) * 1000 }))
+      .map((l) => l.match(/^(\S+) (\S+) (\d+) r(\S*) (.*)$/))
+      .filter((m): m is RegExpMatchArray => !!m && NAME_RE.test(m[1]))
+      .map(([, name, tty, created, resume, cwd]) => ({
+        name,
+        tty: tty.replace('/dev/', ''),
+        cwd,
+        created: Number(created) * 1000,
+        resume: SESSION_ID_RE.test(resume) ? resume : undefined
+      }))
   } catch {
     return [] // no server running yet
   }
@@ -74,9 +85,43 @@ export function startSession(cwd: string, resumeId?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
   const name = `ms-${randomBytes(4).toString('hex')}`
   tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '120', '-y', '36'])
+  if (resumeId) tmux(['set-option', '-t', name, '@mason_resume', resumeId])
   tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}` : 'claude'])
   tmux(['send-keys', '-t', name, 'Enter'])
   return name
+}
+
+// What a shell without a running Claude is showing, in a few words.
+export function peek(name: string): 'trust' | 'shell' | 'starting' {
+  try {
+    const lines = tmux(['capture-pane', '-p', '-t', name]).split('\n').map((l) => l.trim()).filter(Boolean)
+    if (lines.some((l) => /trust this folder/i.test(l))) return 'trust'
+    if (/[%$#❯>]$/.test(lines.at(-1) ?? '')) return 'shell'
+  } catch {}
+  return 'starting'
+}
+
+// Scrolling uses tmux's own history (copy mode), so you can read back everything Claude printed, not just
+// what's on screen. -e drops out of copy mode by itself once you scroll back to the bottom.
+const scrolled = new Set<string>()
+export function scroll(name: string, lines: number): void {
+  if (!TMUX || !NAME_RE.test(name) || !Number.isFinite(lines) || !lines) return
+  const run = (args: string[], then?: () => void) => execFile(TMUX!, [...baseArgs(), ...args], { timeout: 5000, env: cleanEnv() }, () => then?.())
+  const move = () => run(['send-keys', '-t', name, '-X', '-N', String(Math.min(50, Math.abs(lines | 0) || 1)), lines < 0 ? 'scroll-up' : 'scroll-down'])
+  if (lines > 0) {
+    move()
+    return
+  }
+  scrolled.add(name)
+  run(['copy-mode', '-e', '-t', name], move)
+}
+
+// Typing while scrolled back jumps to the bottom first, like any terminal. Synchronous so the keystroke lands after.
+export function unscroll(name: string): void {
+  if (!scrolled.delete(name)) return
+  try {
+    tmux(['send-keys', '-t', name, '-X', 'cancel'])
+  } catch {} // already back at the bottom
 }
 
 export function endSession(name: string): void {
