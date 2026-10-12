@@ -193,3 +193,6 @@ body:has(.view-open) { overflow: hidden; }
 .win-bar .yes { background: var(--wait); color: #fff; }
 .win-bar .no { background: none; color: #8e8e93; }
 .win-bar .no:hover { color: #f2f2f7; background: rgba(255, 255, 255, 0.08); }
+
+/* Stacked: each window stays tall enough to work in; the stack scrolls and the next one peeks in. */
+.wins.layout-stack { overflow-y: auto; grid-auto-rows: minmax(max(420px, 65%), 1fr); padding-bottom: 2px; }

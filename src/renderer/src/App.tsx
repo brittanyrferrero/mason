@@ -228,6 +228,12 @@ export function App() {
     if (!s.id.startsWith('tmux:')) flashNote({ text: `Ended “${s.title}”. It’s in paused if you want it back.`, tone: 'muted' })
   }
 
+  // Stacked windows scroll; keep the focused one in view when ⌘[ / ⌘] moves focus.
+  useEffect(() => {
+    if (view !== 'open' || !focusHost) return
+    document.querySelector(`.win[data-host="${focusHost}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [focusHost, layout, view])
+
   // End from the Open tab: stops the session and closes its window. A window still starting up can only be hidden.
   const endWindow = (host: string) => {
     setEnding(null)
@@ -402,13 +408,14 @@ export function App() {
             <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
           </p>
         )}
-        <div className={`wins ${cols === 1 ? 'col1' : ''}`} style={{ ['--cols' as string]: cols }}>
+        <div className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols }}>
           {windows.map((w) => {
             const focused = focusHost === w.host
             const drop = dropAt?.host === w.host ? (dropAt.after ? 'drop-after' : 'drop-before') : ''
             return (
               <div
                 key={w.host}
+                data-host={w.host}
                 className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${one && !focused ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
                 onFocusCapture={() => setFocusHost(w.host)}
                 onDragOver={(e) => {
