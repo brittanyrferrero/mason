@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, SessionView } from '../../main/state'
 import type { MasonApi } from '../../preload'
 import { Term } from './Term'
@@ -55,14 +55,15 @@ const PinIcon = () => (
     <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
   </svg>
 )
-const PencilIcon = () => (
+const RenameIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+    <path d="M4 7V4h16v3M9 20h6M12 4v16" />
   </svg>
 )
 const NoteIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 5h16M4 11h16M4 17h10" />
+    <path d="M13 21h8" />
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
   </svg>
 )
 const KeyboardIcon = () => (
@@ -141,6 +142,21 @@ export function App() {
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
   const [foot, setFoot] = useState<'paused' | 'ideas' | 'scratch' | null>(null)
+  // Notes you've tucked away ('s:<id>' / 'p:<id>'); the pen brings them back. Remembered on this Mac.
+  const [tucked, setTucked] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('tucked') ?? '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => store('tucked', JSON.stringify([...tucked])), [tucked])
+  const tuck = (key: string, on: boolean) =>
+    setTucked((t) => {
+      const next = new Set(t)
+      on ? next.add(key) : next.delete(key)
+      return next
+    })
   const [noting, setNoting] = useState<string | null>(null) // 's:<id>' or 'p:<id>' while its note is being edited
   const [keysOpen, setKeysOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => stored('theme', 'auto'))
@@ -354,6 +370,8 @@ export function App() {
     if (name.trim() !== s.title) window.mason.rename(s.id, name)
   }
   const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
+  // The pen: brings back a tucked note, otherwise starts writing (or editing) one.
+  const openNote = (key: string) => (tucked.has(key) ? tuck(key, false) : setNoting(key))
   const saveNote = (target: string, body: string | null) => {
     setNoting(null)
     if (body !== null) window.mason.setNote(target, body)
@@ -385,7 +403,7 @@ export function App() {
         if (c === 'KeyN' && !e.shiftKey) {
           e.preventDefault()
           const sid = windows.find((w) => w.host === focusHost)?.sid
-          return sid && setNoting(`s:${sid}`)
+          return sid && openNote(`s:${sid}`)
         }
         if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
@@ -400,7 +418,7 @@ export function App() {
       const sel = visibleRows.find((s) => s.id === cursor)
       if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
       if (k === 'p' && sel) return pin(sel)
-      if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), setNoting(`s:${sel.id}`)
+      if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), openNote(`s:${sel.id}`)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
         e.preventDefault()
@@ -546,7 +564,13 @@ export function App() {
                   ) : (
                     <>
                       {w.sid && (
-                        <button className="x note-x" type="button" aria-label={w.myNote ? 'Edit note' : 'Add a note'} title={w.myNote ? 'Edit note (⌘N)' : 'Add a note (⌘N)'} onClick={() => setNoting(`s:${w.sid}`)}>
+                        <button
+                          className={`x note-x ${w.myNote && tucked.has(`s:${w.sid}`) ? 'has-note' : ''}`}
+                          type="button"
+                          aria-label={w.myNote ? (tucked.has(`s:${w.sid}`) ? 'Show note' : 'Edit note') : 'Add a note'}
+                          title={w.myNote ? (tucked.has(`s:${w.sid}`) ? 'Show note (⌘N)' : 'Edit note (⌘N)') : 'Add a note (⌘N)'}
+                          onClick={() => openNote(`s:${w.sid}`)}
+                        >
                           <NoteIcon />
                         </button>
                       )}
@@ -570,12 +594,8 @@ export function App() {
                     }}
                   />
                 ) : (
-                  w.myNote && (
-                    <button className="win-note" type="button" onClick={() => setNoting(`s:${w.sid}`)} title="Edit note (⌘N)">
-                      <NoteIcon />
-                      <span>{w.myNote}</span>
-                    </button>
-                  )
+                  w.myNote &&
+                  !tucked.has(`s:${w.sid}`) && <NoteView body={w.myNote} className="win-note" onEdit={() => setNoting(`s:${w.sid}`)} onTuck={() => tuck(`s:${w.sid}`, true)} />
                 )}
                 <Term name={w.host} focus={view === 'open' && focused && noting !== `s:${w.sid}`} tick={tick} />
               </div>
@@ -638,21 +658,18 @@ export function App() {
                         Open all {inMason.length}
                       </button>
                     )}
-                    {!p.myNote && noting !== `p:${p.id}` && (
-                      <button className="link" type="button" onClick={() => setNoting(`p:${p.id}`)}>
-                        + Note
+                    {noting !== `p:${p.id}` && (!p.myNote || tucked.has(`p:${p.id}`)) && (
+                      <button className={`link pen-link ${p.myNote ? 'has-note' : ''}`} type="button" onClick={() => openNote(`p:${p.id}`)} title={p.myNote ? 'Show note' : 'Add a note'}>
+                        <NoteIcon />
+                        Note
                       </button>
                     )}
                   </div>
                   {noting === `p:${p.id}` ? (
                     <NoteEdit initial={p.myNote ?? ''} label={`Note on ${p.name}`} onDone={(body) => saveNote(`p:${p.id}`, body)} />
                   ) : (
-                    p.myNote && (
-                      <button className="my-note proj-note" type="button" onClick={() => setNoting(`p:${p.id}`)} title="Edit note">
-                        <NoteIcon />
-                        <span>{p.myNote}</span>
-                      </button>
-                    )
+                    p.myNote &&
+                    !tucked.has(`p:${p.id}`) && <NoteView body={p.myNote} className="my-note proj-note" onEdit={() => setNoting(`p:${p.id}`)} onTuck={() => tuck(`p:${p.id}`, true)} />
                   )}
                   <div className="body">
                     {p.sessions.map((s) => (
@@ -668,7 +685,10 @@ export function App() {
                         onRenamed={(name) => (name === null ? setRenaming(null) : rename(s, name))}
                         onPin={hasPrefs(s) ? () => pin(s) : undefined}
                         noting={noting === `s:${s.id}`}
-                        onNote={hasPrefs(s) ? () => setNoting(`s:${s.id}`) : undefined}
+                        tucked={tucked.has(`s:${s.id}`)}
+                        onTuck={(on) => tuck(`s:${s.id}`, on)}
+                        onEditNote={() => setNoting(`s:${s.id}`)}
+                        onNote={hasPrefs(s) ? () => openNote(`s:${s.id}`) : undefined}
                         onNoted={(body) => saveNote(`s:${s.id}`, body)}
                         onOpen={() => open(s)}
                         onMove={() => move(s.id)}
@@ -818,6 +838,9 @@ type RowProps = {
   onRenamed: (name: string | null) => void // null: cancelled
   onPin?: () => void
   noting: boolean
+  tucked: boolean
+  onTuck: (on: boolean) => void
+  onEditNote: () => void
   onNote?: () => void
   onNoted: (body: string | null) => void // null: cancelled
   onOpen: () => void
@@ -827,7 +850,7 @@ type RowProps = {
   onCancelEnd: () => void
 }
 
-function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, noting, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
+function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, noting, tucked, onTuck, onEditNote, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
   const settled = useRef(false) // Enter or Esc already decided; the blur that follows shouldn't save again
   useEffect(() => {
@@ -884,6 +907,11 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
             {!note && s.next && <span className="now next">Next: {s.next}</span>}
           </button>
         )}
+        {s.myNote && tucked && (
+          <button className="note-badge" type="button" onClick={() => onTuck(false)} aria-label="Show note" title="Show note (N)">
+            <NoteIcon />
+          </button>
+        )}
         {confirming ? (
           <span className="acts confirming">
             <span className="ask">End it?</span>
@@ -898,7 +926,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
           <span className="acts">
             {onRename && (
               <button className="icon" type="button" onClick={onRename} aria-label="Rename" title="Rename (R)">
-                <PencilIcon />
+                <RenameIcon />
               </button>
             )}
             {onNote && (
@@ -925,18 +953,14 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
       {noting ? (
         <NoteEdit initial={s.myNote ?? ''} label={`Note on ${s.title}`} onDone={onNoted} />
       ) : (
-        s.myNote && (
-          <button className="my-note" type="button" onClick={onNote} title="Edit note (N)">
-            <NoteIcon />
-            <span>{s.myNote}</span>
-          </button>
-        )
+        s.myNote && !tucked && <NoteView body={s.myNote} className="my-note" onEdit={onEditNote} onTuck={() => onTuck(true)} />
       )}
     </div>
   )
 }
 
-// Editing a note: Enter saves, Shift+Enter for a new line, Esc cancels. Clearing it removes the note.
+// Editing a note: Enter is a new line; ⌘↵, Esc, or clicking away saves (a note is never thrown away by accident).
+// Clearing it removes the note.
 function NoteEdit({ initial, label, onDone }: { initial: string; label: string; onDone: (body: string | null) => void }) {
   const settled = useRef(false)
   const finish = (body: string | null) => {
@@ -956,19 +980,52 @@ function NoteEdit({ initial, label, onDone }: { initial: string; label: string; 
       defaultValue={initial}
       maxLength={20000}
       aria-label={label}
-      placeholder="A note for future you… (Enter to save, Esc to cancel)"
+      placeholder="A note for future you… (⌘↵ or click away to save)"
       ref={(el) => el && grow(el)}
       onInput={(e) => grow(e.currentTarget)}
       onKeyDown={(e) => {
         e.stopPropagation()
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if ((e.key === 'Enter' && e.metaKey) || e.key === 'Escape') {
           e.preventDefault()
           finish(e.currentTarget.value)
         }
-        if (e.key === 'Escape') finish(null)
       }}
       onBlur={(e) => finish(e.currentTarget.value)}
     />
+  )
+}
+
+// A saved note. Folds after a few lines, with a fade and "more" when there's more below; ▴ tucks it away.
+function NoteView({ body, className, onEdit, onTuck }: { body: string; className: string; onEdit: () => void; onTuck: () => void }) {
+  const text = useRef<HTMLSpanElement>(null)
+  const [open, setOpen] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  useLayoutEffect(() => {
+    const el = text.current
+    if (!el) return
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [body, open])
+  return (
+    <div className={`note-view ${className} ${open ? 'open' : ''} ${overflows ? 'folded' : ''}`}>
+      <NoteIcon />
+      <button className="note-body" type="button" onClick={onEdit} title="Edit note">
+        <span ref={text}>{body}</span>
+      </button>
+      <span className="note-tools">
+        {(overflows || open) && (
+          <button type="button" onClick={() => setOpen((o) => !o)}>
+            {open ? 'less ▴' : 'more ▾'}
+          </button>
+        )}
+        <button className="note-tuck" type="button" onClick={onTuck} aria-label="Tuck note away" title="Tuck away · the pen brings it back">
+          ▴
+        </button>
+      </span>
+    </div>
   )
 }
 
