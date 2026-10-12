@@ -97,7 +97,8 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['One at a time', ['⌘', '↵']],
       ['Change layout', ['⌘', 'L']],
       ['Change order', ['⌘', 'O']],
-      ['Hide window', ['⌘', '⇧', 'W']]
+      ['Hide window', ['⌘', '⇧', 'W']],
+      ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
   ]
 ]
@@ -128,6 +129,7 @@ export function App() {
   const [cursor, setCursor] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [ending, setEnding] = useState<string | null>(null) // Open-tab window asking "End this session?"
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
   const [foot, setFoot] = useState<'paused' | 'ideas' | null>(null)
@@ -226,6 +228,14 @@ export function App() {
     if (!s.id.startsWith('tmux:')) flashNote({ text: `Ended “${s.title}”. It’s in paused if you want it back.`, tone: 'muted' })
   }
 
+  // End from the Open tab: stops the session and closes its window. A window still starting up can only be hidden.
+  const endWindow = (host: string) => {
+    setEnding(null)
+    const s = allSessions.find(({ s }) => s.host === host)?.s
+    if (s) end(s)
+    else setOpenHosts((hs) => hs.filter((h) => h !== host))
+  }
+
   // Windows in the Open tab. "Project" keeps the same order as the list; the sorts are stable, so ties stay in it.
   const windows = useMemo(() => {
     const known = allSessions.filter(({ s }) => s.host && openHosts.includes(s.host))
@@ -304,6 +314,7 @@ export function App() {
         if (c === 'KeyL') return e.preventDefault(), setLayout((v) => cycle(LAYOUTS, v))
         if (c === 'KeyO') return e.preventDefault(), setSort((v) => cycle(SORTS, v))
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
+        if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
       if (view === 'open' || e.metaKey || e.ctrlKey || e.altKey) return
@@ -328,7 +339,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout])
+  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending])
 
   useEffect(() => {
     if (!keysOpen) return
@@ -434,9 +445,26 @@ export function App() {
                     {w.project && <span className="wp">{w.project}</span>}
                     {w.title}
                   </b>
-                  <button className="x" type="button" aria-label="Hide this window (the session keeps running)" title="Hide window · the session keeps running, reopen it from Projects (⌘⇧W)" onClick={() => closeWindow(w.host)}>
-                    –
-                  </button>
+                  {ending === w.host ? (
+                    <>
+                      <span className="ask">End this session?</span>
+                      <button className="yes" type="button" onClick={() => endWindow(w.host)} title="Stop it and close the window. The conversation goes to paused so you can resume it.">
+                        End
+                      </button>
+                      <button className="no" type="button" onClick={() => setEnding(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="x" type="button" aria-label="Hide this window (the session keeps running)" title="Hide window · the session keeps running, reopen it from Projects (⌘⇧W)" onClick={() => closeWindow(w.host)}>
+                        –
+                      </button>
+                      <button className="x" type="button" aria-label="End this session and close its window" title="End session · stops it and closes the window; it goes to paused (⌘⇧K)" onClick={() => setEnding(w.host)}>
+                        ×
+                      </button>
+                    </>
+                  )}
                 </div>
                 <Term name={w.host} focus={view === 'open' && focused} tick={tick} />
               </div>

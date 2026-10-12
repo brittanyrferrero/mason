@@ -186,3 +186,10 @@ body:has(.view-open) { overflow: hidden; }
 .acts .icon svg { width: 14px; height: 14px; }
 .rename { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--edge); border-radius: 6px; padding: 1px 6px; margin: -2px 0; outline: none; user-select: text; }
 .rename:focus { border-color: var(--muted); }
+
+/* Ending a session from its Open-tab window */
+.win-bar .ask { color: #d1d1d6; padding: 0 4px; white-space: nowrap; }
+.win-bar .yes, .win-bar .no { border: 0; border-radius: 5px; font-size: 12px; padding: 2px 8px; }
+.win-bar .yes { background: var(--wait); color: #fff; }
+.win-bar .no { background: none; color: #8e8e93; }
+.win-bar .no:hover { color: #f2f2f7; background: rgba(255, 255, 255, 0.08); }
