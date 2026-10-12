@@ -1,6 +1,7 @@
 import type { DB } from './db'
 import type { Need } from './events'
 import type { LiveInfo } from './live'
+import { readSummaries, summariesOn } from './summarize'
 import { peek, type Hosted } from './tmux'
 
 export type SessionStatus = 'working' | 'needs' | 'idle'
@@ -14,15 +15,19 @@ export type SessionView = {
   lastActivity: number
   host: string | null // tmux session name when it lives inside Mason; null when it's in a Terminal window
   pinned: boolean
+  next?: string // from the summary: the very next step
+  myNote?: string
 }
 
-export type PausedView = { id: string; title: string; project: string; pickUp: string; lastActivity: number }
+export type PausedView = { id: string; title: string; project: string; pickUp: string; next?: string; myNote?: string; lastActivity: number }
 
 export type AppState = {
-  projects: { id: number; name: string; sessions: SessionView[] }[]
+  projects: { id: number; name: string; sessions: SessionView[]; myNote?: string }[]
   paused: PausedView[]
   ideas: { id: number; body: string; from: string }[]
   canHost: boolean
+  summaries: boolean
+  scratch: string
 }
 
 // Closed sessions from the last month are resumable; only the most recent few are shown to keep the panel short.
@@ -77,8 +82,12 @@ export function buildState(
     (db.prepare('SELECT session_id, name, pinned FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number }[]).map((p) => [p.session_id, p])
   )
   const pinned = (id: string) => !!prefs.get(id)?.pinned
-  const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>) => prefs.get(r.id)?.name || r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
-  const byProject = new Map<number, { id: number; name: string; sessions: SessionView[] }>()
+  // Your own name wins; then Claude's summary (it keeps up as the work drifts); then Claude Code's first-prompt title.
+  const sums = readSummaries(db)
+  const myNotes = new Map((db.prepare('SELECT target, body FROM my_notes').all() as { target: string; body: string }[]).map((n) => [n.target, n.body]))
+  const myNote = (id: string) => myNotes.get(`s:${id}`)
+  const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>) => prefs.get(r.id)?.name || sums.get(r.id)?.title || r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
+  const byProject = new Map<number, AppState['projects'][number]>()
   const add = (pid: number, name: string, s: SessionView) => {
     if (!byProject.has(pid)) byProject.set(pid, { id: pid, name, sessions: [] })
     byProject.get(pid)!.sessions.push(s)
@@ -95,7 +104,9 @@ export function buildState(
         id: r.id,
         title: title(r),
         project: r.project,
-        pickUp: oneLine(r.last_text) || oneLine(r.last_prompt),
+        pickUp: sums.get(r.id)?.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
+        next: sums.get(r.id)?.next || undefined,
+        myNote: myNote(r.id),
         lastActivity: r.last_activity ?? 0
       })
       continue
@@ -122,7 +133,13 @@ export function buildState(
     add(r.project_id, r.project, {
       id: r.id,
       title: title(r),
-      now: l.copies > 1 ? `Running in ${l.copies} places at once` : (need?.message ?? (oneLine(r.last_text) || oneLine(r.last_prompt))),
+      // While Claude works, its latest words are the freshest news; once it stops, the recap says where you were.
+      now:
+        l.copies > 1
+          ? `Running in ${l.copies} places at once`
+          : (need?.message ?? ((l.status !== 'working' && sums.get(r.id)?.doing) || oneLine(r.last_text) || oneLine(r.last_prompt))),
+      next: !need && l.status !== 'working' ? sums.get(r.id)?.next || undefined : undefined,
+      myNote: myNote(r.id),
       status: need ? 'needs' : l.status,
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
@@ -170,5 +187,6 @@ export function buildState(
   const projects = [...byProject.values()]
   const rank = (s: SessionView) => (s.pinned ? 2 : 0) + (s.status === 'needs' ? 1 : 0)
   for (const p of projects) p.sessions.sort((a, b) => rank(b) - rank(a))
-  return { projects, paused, ideas, canHost }
+  for (const p of projects) p.myNote = myNotes.get(`p:${p.id}`)
+  return { projects, paused, ideas, canHost, summaries: summariesOn(db), scratch: myNotes.get('scratch') ?? '' }
 }

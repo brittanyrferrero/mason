@@ -201,3 +201,28 @@ body:has(.view-open) { overflow: hidden; }
 .mini.resumable { width: 100%; border: 0; border-bottom: 1px solid var(--edge); background: none; text-align: left; font: inherit; color: inherit; }
 .mini.resumable:disabled { cursor: default; }
 .resume-hint { font-size: 13.5px; color: var(--muted); padding: 6px 8px; }
+
+/* "By project": a small heading spans the row above each project's windows. */
+.wins { --row: minmax(0, 1fr); }
+.wins.layout-stack { --row: minmax(max(420px, 65%), 1fr); }
+.group-name { grid-column: 1 / -1; margin: 6px 0 -4px 2px; font-size: 12.5px; color: var(--muted); }
+.group-name:first-child { margin-top: 0; }
+
+/* Summary recap: the next step sits under what you were doing, a shade quieter. */
+.now.next, .mini-sub.next { color: var(--faint); }
+
+/* Your notes: one quiet line under a session or project; click to edit. */
+.item { flex-wrap: wrap; }
+.my-note { flex-basis: 100%; display: flex; align-items: baseline; gap: 6px; border: 0; background: none; text-align: left; padding: 0 12px 6px 31px; margin-top: -2px; font-size: 13px; color: var(--ink-soft); }
+.my-note span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.my-note svg, .my-note-line svg { width: 11px; height: 11px; flex: none; color: var(--faint); position: relative; top: 1px; }
+.my-note:hover span { text-decoration: underline; text-decoration-color: var(--edge); text-underline-offset: 3px; }
+.proj-note { padding: 8px 4px 2px 26px; margin: 0; }
+.my-note-line { display: flex; gap: 6px; align-items: baseline; color: var(--ink-soft); }
+.note-edit, .scratch { flex-basis: 100%; width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: var(--card); border: 1px solid var(--edge); border-radius: 8px; padding: 6px 10px; resize: none; outline: none; user-select: text; }
+.note-edit { margin: 2px 0 8px 26px; width: calc(100% - 26px); overflow: hidden; }
+.note-edit:focus, .scratch:focus { border-color: var(--muted); }
+.scratch { margin-top: 10px; min-height: 180px; resize: vertical; font-size: 14px; line-height: 1.5; padding: 12px 14px; }
+/* The divider belongs to the whole item, so a note sits above it, with its session. */
+.item { border-bottom: 1px solid var(--edge); }
+.item .row { border-bottom: 0; }

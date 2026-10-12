@@ -83,6 +83,13 @@ export function openDb(): DB {
       name       TEXT,
       pinned     INTEGER NOT NULL DEFAULT 0
     );
+    -- Your own notes: on a session ('s:<id>'), on a project ('p:<id>'), or the free-floating 'scratch'.
+    -- Keyed by what they're about, so they outlive ending, pausing, and restarts.
+    CREATE TABLE IF NOT EXISTS my_notes (
+      target     TEXT PRIMARY KEY,
+      body       TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL

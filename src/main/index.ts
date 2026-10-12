@@ -8,6 +8,7 @@ import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
 import * as term from './pty'
 import { buildState } from './state'
+import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
 import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, TMUX, unscroll } from './tmux'
 
@@ -141,6 +142,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
 
   db = openDb()
+  initSummaries(db)
   ingestAll(db)
 
   // Developer check: print what Mason sees and exit, without opening a window.
@@ -217,6 +219,25 @@ app.whenReady().then(() => {
   })
 
   // Your own name for a session (empty clears it, back to Claude's title) and whether it's pinned.
+  // Your notes. Empty means remove.
+  ipcMain.handle('note:set', (e, target: unknown, body: unknown) => {
+    if (!trusted(e) || typeof target !== 'string' || typeof body !== 'string' || body.length > 20_000) return false
+    const [kind, id] = target.split(':')
+    const ok = target === 'scratch' || (kind === 's' && SESSION_ID_RE.test(id ?? '')) || (kind === 'p' && /^\d+$/.test(id ?? ''))
+    if (!ok) return false
+    if (body.trim()) db.prepare('INSERT INTO my_notes (target, body, updated_at) VALUES (?, ?, ?) ON CONFLICT(target) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at').run(target, body.replace(/\s+$/, ''), Date.now())
+    else db.prepare('DELETE FROM my_notes WHERE target = ?').run(target)
+    pushState()
+    return true
+  })
+
+  ipcMain.handle('summaries:set', (e, on: unknown) => {
+    if (!trusted(e) || typeof on !== 'boolean') return false
+    setSummaries(db, on)
+    pushState()
+    return true
+  })
+
   ipcMain.handle('session:rename', (e, id: unknown, name: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof name !== 'string') return false
     const clean = name.replace(/\s+/g, ' ').trim().slice(0, 80)
@@ -293,6 +314,13 @@ app.whenReady().then(() => {
   } catch {}
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)
+  // Summaries catch up quietly in the background, one session at a time.
+  const summarize = () => {
+    const busy = new Set([...readLive()].filter(([, l]) => l.status === 'working').map(([id]) => id))
+    summarizeDue(db, busy, () => refreshSoon(false))
+  }
+  setTimeout(summarize, 15_000)
+  setInterval(summarize, 60_000)
 
   createWindow()
   pushState()

@@ -22,17 +22,18 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] Move a Terminal session into Mason; resume paused sessions; start new ones per project
 - [x] Shush: collapse everything except what you open on purpose
 - [x] Open tab: several sessions at once, stacked / side by side / grid / one at a time, drag to reorder, ⌘ shortcuts
+- [x] Open tab by project: group windows under project headings, or show just one project (⌘P)
 - [x] Scroll back through a session's history inside Mason
 
 ## Now (in this order)
 
 - [x] **Rename and pin.** Give a session your own name (R, or the pencil on hover); pinned sessions (P) lead their project.
-- [ ] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
+- [x] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
       a two-line "where was I?" recap: what you were doing and the next step. Can be turned off.
 - [ ] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
       session can pick up exactly where it left off. **/pause** inside Claude does this and stops the session;
       the note shows on the paused list and you can edit it.
-- [ ] **Persistent notes.** A note on any session or project that survives ending, pausing, and restarts.
+- [x] **Persistent notes.** A note on any session or project that survives ending, pausing, and restarts.
       Shows as one muted line on the row; click to edit. Plus one free-floating scratchpad.
 
 ## Next

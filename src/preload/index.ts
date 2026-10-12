@@ -18,6 +18,8 @@ const api = {
   end: (id: string): Promise<boolean> => ipcRenderer.invoke('session:end', id),
   rename: (id: string, name: string): Promise<boolean> => ipcRenderer.invoke('session:rename', id, name),
   pin: (id: string, pinned: boolean): Promise<boolean> => ipcRenderer.invoke('session:pin', id, pinned),
+  setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
+  setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
 
   attach: (name: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('term:attach', name, cols, rows),
   input: (name: string, data: string) => ipcRenderer.send('term:input', name, data),

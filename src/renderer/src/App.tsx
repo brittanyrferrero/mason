@@ -60,6 +60,11 @@ const PencilIcon = () => (
     <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
   </svg>
 )
+const NoteIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 5h16M4 11h16M4 17h10" />
+  </svg>
+)
 const KeyboardIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
@@ -83,6 +88,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Open all', ['A']],
       ['Rename', ['R']],
       ['Pin', ['P']],
+      ['Note on a session', ['N']],
       ['Shush', ['S']],
       ['Show this', ['?']]
     ]
@@ -97,6 +103,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['One at a time', ['⌘', '↵']],
       ['Change layout', ['⌘', 'L']],
       ['Change order', ['⌘', 'O']],
+      ['Next project', ['⌘', 'P']],
       ['Hide window', ['⌘', '⇧', 'W']],
       ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
@@ -104,7 +111,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
 ]
 
 const SORTS: [Sort, string][] = [
-  ['project', 'automatically'],
+  ['project', 'by project'],
   ['waiting', 'waiting first'],
   ['recent', 'by recent activity'],
   ['custom', 'by hand']
@@ -132,13 +139,15 @@ export function App() {
   const [ending, setEnding] = useState<string | null>(null) // Open-tab window asking "End this session?"
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
-  const [foot, setFoot] = useState<'paused' | 'ideas' | null>(null)
+  const [foot, setFoot] = useState<'paused' | 'ideas' | 'scratch' | null>(null)
+  const [noting, setNoting] = useState<string | null>(null) // 's:<id>' or 'p:<id>' while its note is being edited
   const [keysOpen, setKeysOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => stored('theme', 'auto'))
   // How the Open tab is arranged. Custom order is whatever you last dragged or nudged.
   const [sort, setSort] = useState<Sort>(() => stored('sort', 'project'))
   const [layout, setLayout] = useState<Layout>(() => stored('openLayout', 'stack'))
   const lastMulti = useRef<Layout>(layout === 'one' ? 'stack' : layout)
+  const [only, setOnly] = useState<string>(() => stored('openProject', '')) // '' = every project
   const [order, setOrder] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('order') ?? '[]')
@@ -167,6 +176,7 @@ export function App() {
     if (layout !== 'one') lastMulti.current = layout
   }, [layout])
   useEffect(() => store('order', JSON.stringify(order)), [order])
+  useEffect(() => store('openProject', only), [only])
 
   useEffect(() => {
     store('shush', shushed ? 'on' : 'off')
@@ -260,14 +270,42 @@ export function App() {
     if (view === 'open' && !windows.length) setView('projects')
   }, [windows, view])
 
+  // "From one project": the others stay mounted but hidden, so their terminals don't reconnect.
+  const openProjects = useMemo(() => [...new Set(windows.map((w) => w.project).filter(Boolean))], [windows])
+  useEffect(() => {
+    if (only && !openProjects.includes(only)) setOnly('')
+  }, [openProjects, only])
+  const shown = useMemo(() => (only ? windows.filter((w) => w.project === only || !w.project) : windows), [windows, only])
+
   const one = layout === 'one'
-  const n = windows.length
-  const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, n) : n <= 1 ? 1 : n === 2 || n === 4 ? 2 : 3
+  const n = shown.length
+  // "By project" puts each project under its own small heading and starts it on a fresh row.
+  const groups = useMemo(() => {
+    const g: { project: string; hosts: string[] }[] = []
+    for (const w of shown) {
+      const last = g.at(-1)
+      if (last && last.project === w.project) last.hosts.push(w.host)
+      else g.push({ project: w.project, hosts: [w.host] })
+    }
+    return g
+  }, [shown])
+  const grouped = sort === 'project' && !one && !only && groups.length > 1
+  const widest = grouped ? Math.max(...groups.map((g) => g.hosts.length)) : n
+  const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, widest) : widest <= 1 ? 1 : widest === 2 || widest === 4 ? 2 : 3
+  const rows = grouped ? groups.map((g) => `auto repeat(${Math.ceil(g.hosts.length / cols)}, var(--row))`).join(' ') : undefined
+  const headingFor = new Map(grouped ? groups.map((g) => [g.hosts[0], g.project || 'Starting']) : [])
 
   const closeWindow = (host: string) => setOpenHosts((hs) => hs.filter((h) => h !== host))
   const step = (dir: number) => {
-    const i = windows.findIndex((w) => w.host === focusHost)
-    setFocusHost(windows[(i < 0 ? 0 : i + dir + windows.length) % windows.length].host)
+    if (!n) return
+    const i = shown.findIndex((w) => w.host === focusHost)
+    setFocusHost(shown[(i < 0 ? 0 : i + dir + n) % n].host)
+  }
+  const showProject = (p: string) => {
+    setOnly(p)
+    const first = (p ? windows.filter((w) => w.project === p) : windows)[0]
+    if (first && p && windows.find((w) => w.host === focusHost)?.project !== p) setFocusHost(first.host)
+    setTick((t) => t + 1)
   }
   // Any manual arrangement becomes the custom order.
   const arrange = (hosts: string[]) => {
@@ -275,7 +313,7 @@ export function App() {
     setSort('custom')
   }
   const nudge = (dir: number) => {
-    const hosts = windows.map((w) => w.host)
+    const hosts = shown.map((w) => w.host)
     const i = hosts.indexOf(focusHost ?? '')
     const j = i + dir
     if (i < 0 || j < 0 || j >= hosts.length) return
@@ -284,11 +322,11 @@ export function App() {
   }
   const dropOn = (target: string, after: boolean) => {
     if (!dragging || dragging === target) return
-    const hosts = windows.map((w) => w.host).filter((h) => h !== dragging)
+    const hosts = shown.map((w) => w.host).filter((h) => h !== dragging)
     hosts.splice(hosts.indexOf(target) + (after ? 1 : 0), 0, dragging)
     arrange(hosts)
   }
-  const toggleOne = (host = focusHost ?? windows[0]?.host) => {
+  const toggleOne = (host = focusHost ?? shown[0]?.host) => {
     if (!host) return
     setFocusHost(host)
     setLayout((l) => (l === 'one' ? lastMulti.current : 'one'))
@@ -301,6 +339,10 @@ export function App() {
     if (name.trim() !== s.title) window.mason.rename(s.id, name)
   }
   const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
+  const saveNote = (target: string, body: string | null) => {
+    setNoting(null)
+    if (body !== null) window.mason.setNote(target, body)
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -319,6 +361,11 @@ export function App() {
         if (c === 'Enter') return e.preventDefault(), toggleOne()
         if (c === 'KeyL') return e.preventDefault(), setLayout((v) => cycle(LAYOUTS, v))
         if (c === 'KeyO') return e.preventDefault(), setSort((v) => cycle(SORTS, v))
+        if (c === 'KeyP' && openProjects.length > 1) {
+          e.preventDefault()
+          const all = ['', ...openProjects]
+          return showProject(all[(all.indexOf(only) + 1) % all.length])
+        }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
         if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
@@ -333,6 +380,7 @@ export function App() {
       const sel = visibleRows.find((s) => s.id === cursor)
       if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
       if (k === 'p' && sel) return pin(sel)
+      if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), setNoting(`s:${sel.id}`)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
         e.preventDefault()
@@ -345,7 +393,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending])
+  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending, shown, only, openProjects])
 
   useEffect(() => {
     if (!keysOpen) return
@@ -402,21 +450,34 @@ export function App() {
 
       {/* Kept mounted (just hidden) so terminals don't reconnect every time you switch tabs. */}
       <section className="desk" hidden={view !== 'open'}>
-        {n > 1 && (
+        {(n > 1 || openProjects.length > 1) && (
           <p className="desk-bar">
-            {n} sessions viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
+            {n} sessions{' '}
+            {openProjects.length > 1 && (
+              <>
+                from <Pick label="Project" value={only} options={[['', 'all projects'], ...openProjects.map((p): [string, string] => [p, p])]} onChange={showProject} />{' '}
+              </>
+            )}
+            viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
             <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
           </p>
         )}
-        <div className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols }}>
-          {windows.map((w) => {
+        <div className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols, gridTemplateRows: rows }}>
+          {windows.flatMap((w) => {
+            const hidden = only && w.project && w.project !== only
             const focused = focusHost === w.host
             const drop = dropAt?.host === w.host ? (dropAt.after ? 'drop-after' : 'drop-before') : ''
-            return (
+            const heading = headingFor.get(w.host)
+            return [
+              heading && (
+                <p className="group-name" key={`group:${heading}`}>
+                  {heading}
+                </p>
+              ),
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${one && !focused ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
                 onFocusCapture={() => setFocusHost(w.host)}
                 onDragOver={(e) => {
                   if (!dragging || dragging === w.host) return
@@ -449,7 +510,7 @@ export function App() {
                 >
                   {w.needs && <span className="dot needs" title="Waiting on you" />}
                   <b>
-                    {w.project && <span className="wp">{w.project}</span>}
+                    {w.project && !grouped && !only && <span className="wp">{w.project}</span>}
                     {w.title}
                   </b>
                   {ending === w.host ? (
@@ -475,7 +536,7 @@ export function App() {
                 </div>
                 <Term name={w.host} focus={view === 'open' && focused} tick={tick} />
               </div>
-            )
+            ]
           })}
         </div>
       </section>
@@ -523,17 +584,32 @@ export function App() {
                       </span>
                     )}
                   </summary>
-                  {state.canHost && (
-                    <div className="projacts">
+                  <div className="projacts">
+                    {state.canHost && (
                       <button className="link" type="button" onClick={() => newSession(p.id)}>
                         + New session
                       </button>
-                      {inMason.length > 1 && (
-                        <button className="link" type="button" onClick={() => openAll(inMason)}>
-                          Open all {inMason.length}
-                        </button>
-                      )}
-                    </div>
+                    )}
+                    {state.canHost && inMason.length > 1 && (
+                      <button className="link" type="button" onClick={() => openAll(inMason)}>
+                        Open all {inMason.length}
+                      </button>
+                    )}
+                    {!p.myNote && noting !== `p:${p.id}` && (
+                      <button className="link" type="button" onClick={() => setNoting(`p:${p.id}`)}>
+                        + Note
+                      </button>
+                    )}
+                  </div>
+                  {noting === `p:${p.id}` ? (
+                    <NoteEdit initial={p.myNote ?? ''} label={`Note on ${p.name}`} onDone={(body) => saveNote(`p:${p.id}`, body)} />
+                  ) : (
+                    p.myNote && (
+                      <button className="my-note proj-note" type="button" onClick={() => setNoting(`p:${p.id}`)} title="Edit note">
+                        <NoteIcon />
+                        <span>{p.myNote}</span>
+                      </button>
+                    )
                   )}
                   <div className="body">
                     {p.sessions.map((s) => (
@@ -548,6 +624,9 @@ export function App() {
                         onRename={hasPrefs(s) ? () => setRenaming(s.id) : undefined}
                         onRenamed={(name) => (name === null ? setRenaming(null) : rename(s, name))}
                         onPin={hasPrefs(s) ? () => pin(s) : undefined}
+                        noting={noting === `s:${s.id}`}
+                        onNote={hasPrefs(s) ? () => setNoting(`s:${s.id}`) : undefined}
+                        onNoted={(body) => saveNote(`s:${s.id}`, body)}
                         onOpen={() => open(s)}
                         onMove={() => move(s.id)}
                         onEnd={() => setConfirming(s.id)}
@@ -562,7 +641,7 @@ export function App() {
           </div>
         )}
 
-        {state && (state.paused.length > 0 || state.ideas.length > 0) && (
+        {state && (
           <div className="foot">
             <div className="foot-links">
               {state.paused.length > 0 && (
@@ -575,7 +654,11 @@ export function App() {
                   {state.ideas.length} ideas saved
                 </button>
               )}
+              <button className="foot-btn" type="button" aria-expanded={foot === 'scratch'} onClick={() => setFoot(foot === 'scratch' ? null : 'scratch')}>
+                Scratchpad
+              </button>
             </div>
+            {foot === 'scratch' && <Scratch initial={state.scratch} />}
             {foot === 'paused' && (
               <div className="foot-panel">
                 {state.paused.map((p) => (
@@ -589,7 +672,18 @@ export function App() {
                       </span>
                       {p.pickUp && (
                         <span className="mini-sub" title={p.pickUp}>
-                          Last: {p.pickUp}
+                          {p.next ? p.pickUp : `Last: ${p.pickUp}`}
+                        </span>
+                      )}
+                      {p.next && (
+                        <span className="mini-sub next" title={p.next}>
+                          Next: {p.next}
+                        </span>
+                      )}
+                      {p.myNote && (
+                        <span className="mini-sub my-note-line" title={p.myNote}>
+                          <NoteIcon />
+                          {p.myNote}
                         </span>
                       )}
                     </div>
@@ -617,6 +711,22 @@ export function App() {
 
         <footer className="meta">
           <span>Mason 0.3</span>
+          {state && (
+            <span className="theme">
+              <button
+                type="button"
+                aria-pressed={state.summaries}
+                onClick={() => window.mason.setSummaries(!state.summaries)}
+                title={
+                  state.summaries
+                    ? 'Summaries are on: Claude names each session and notes where you were. This sends a short excerpt of each conversation to Claude. Click to turn off.'
+                    : 'Summaries are off. Click to let Claude name each session and note where you were.'
+                }
+              >
+                Summaries {state.summaries ? 'on' : 'off'}
+              </button>
+            </span>
+          )}
           <span className="theme" role="group" aria-label="Theme">
             {(['auto', 'light', 'dark'] as Theme[]).map((t) => (
               <button key={t} type="button" aria-pressed={theme === t} onClick={() => setTheme(t)}>
@@ -640,6 +750,9 @@ type RowProps = {
   onRename?: () => void
   onRenamed: (name: string | null) => void // null: cancelled
   onPin?: () => void
+  noting: boolean
+  onNote?: () => void
+  onNoted: (body: string | null) => void // null: cancelled
   onOpen: () => void
   onMove: () => void
   onEnd: () => void
@@ -647,7 +760,7 @@ type RowProps = {
   onCancelEnd: () => void
 }
 
-function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
+function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, noting, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
   const settled = useRef(false) // Enter or Esc already decided; the blur that follows shouldn't save again
   useEffect(() => {
@@ -701,6 +814,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
               {inTerminal && <span className="where">in Terminal</span>}
             </span>
             {note ? <span className={`toast ${note.tone}`}>{note.text}</span> : s.now && <span className="now">{s.now}</span>}
+            {!note && s.next && <span className="now next">Next: {s.next}</span>}
           </button>
         )}
         {confirming ? (
@@ -720,6 +834,11 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
                 <PencilIcon />
               </button>
             )}
+            {onNote && (
+              <button className="icon" type="button" onClick={onNote} aria-label={s.myNote ? 'Edit note' : 'Add a note'} title={s.myNote ? 'Edit note (N)' : 'Add a note (N)'}>
+                <NoteIcon />
+              </button>
+            )}
             {onPin && (
               <button className="icon" type="button" onClick={onPin} aria-label={s.pinned ? 'Unpin' : 'Pin'} title={s.pinned ? 'Unpin (P)' : 'Pin to the top of its project (P)'}>
                 <PinIcon />
@@ -736,7 +855,75 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
           </span>
         )}
       </div>
+      {noting ? (
+        <NoteEdit initial={s.myNote ?? ''} label={`Note on ${s.title}`} onDone={onNoted} />
+      ) : (
+        s.myNote && (
+          <button className="my-note" type="button" onClick={onNote} title="Edit note (N)">
+            <NoteIcon />
+            <span>{s.myNote}</span>
+          </button>
+        )
+      )}
     </div>
+  )
+}
+
+// Editing a note: Enter saves, Shift+Enter for a new line, Esc cancels. Clearing it removes the note.
+function NoteEdit({ initial, label, onDone }: { initial: string; label: string; onDone: (body: string | null) => void }) {
+  const settled = useRef(false)
+  const finish = (body: string | null) => {
+    if (settled.current) return
+    settled.current = true
+    onDone(body)
+  }
+  const grow = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  return (
+    <textarea
+      className="note-edit"
+      autoFocus
+      rows={1}
+      defaultValue={initial}
+      maxLength={20000}
+      aria-label={label}
+      placeholder="A note for future you… (Enter to save, Esc to cancel)"
+      ref={(el) => el && grow(el)}
+      onInput={(e) => grow(e.currentTarget)}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          finish(e.currentTarget.value)
+        }
+        if (e.key === 'Escape') finish(null)
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+    />
+  )
+}
+
+// One free-floating page for whatever's in your head. Saves as you type.
+function Scratch({ initial }: { initial: string }) {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const save = (body: string) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => window.mason.setNote('scratch', body), 500)
+  }
+  return (
+    <textarea
+      className="scratch"
+      autoFocus
+      defaultValue={initial}
+      maxLength={20000}
+      aria-label="Scratchpad"
+      placeholder="Anything you don’t want to hold in your head. Saves as you type."
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={(e) => save(e.currentTarget.value)}
+      onBlur={(e) => (clearTimeout(timer.current), window.mason.setNote('scratch', e.currentTarget.value))}
+    />
   )
 }
 
