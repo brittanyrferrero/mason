@@ -33,7 +33,10 @@ export function readLive(): Map<string, LiveInfo> {
     try {
       const d = JSON.parse(readFileSync(join(CLAUDE_SESSIONS, f), 'utf8'))
       if (typeof d.sessionId !== 'string' || typeof d.pid !== 'number' || !alive(d.pid)) continue
-      if (typeof d.kind === 'string' && d.kind !== 'interactive') continue // e.g. Mason's own background summaries
+      // Only sessions you run yourself. Automated runs (Mason's summaries, Claude Code's background reviews) can start
+      // inside one of your Mason windows and would otherwise claim it as theirs.
+      if (typeof d.kind === 'string' && d.kind !== 'interactive') continue
+      if (typeof d.entrypoint === 'string' && d.entrypoint.startsWith('sdk')) continue
       // The same conversation can be resumed in two places at once; count the copies so nothing acts on it blindly.
       // Claude records its tmux pane ("ms-1234abcd:@6.%6"), which names the Mason shell it's in.
       const copy: Copy = { pid: d.pid, status: d.status === 'busy' ? 'working' : 'idle', tmux: typeof d.tmux === 'string' ? d.tmux.split(':')[0] : undefined }

@@ -257,7 +257,8 @@ export function App() {
 
   // Windows in the Open tab. "Project" keeps the same order as the list; the sorts are stable, so ties stay in it.
   const windows = useMemo(() => {
-    const known = allSessions.filter(({ s }) => s.host && openHosts.includes(s.host))
+    // One window per host, whatever the list says: a repeated React key would leave stray copies on screen.
+    const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
     const pending = openHosts
       .filter((h) => !known.some(({ s }) => s.host === h))
       .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))

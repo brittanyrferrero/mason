@@ -86,8 +86,12 @@ export function buildState(
 
   const hostByTty = new Map(hosted.map((h) => [h.tty, h.name]))
   const hostNames = new Set(hosted.map((h) => h.name))
-  const hostOf = (c: { tty?: string; tmux?: string }) => (c.tmux && hostNames.has(c.tmux) ? c.tmux : (c.tty && hostByTty.get(c.tty)) || null)
   const claimed = new Set<string>()
+  // Each Mason window belongs to exactly one session; anything else that turns up in it gets no window.
+  const hostOf = (c: { tty?: string; tmux?: string }) => {
+    const h = c.tmux && hostNames.has(c.tmux) ? c.tmux : (c.tty && hostByTty.get(c.tty)) || null
+    return h && !claimed.has(h) ? h : null
+  }
   const prefs = new Map(
     (db.prepare('SELECT session_id, name, pinned FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number }[]).map((p) => [p.session_id, p])
   )
