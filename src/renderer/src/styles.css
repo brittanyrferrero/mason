@@ -196,3 +196,8 @@ body:has(.view-open) { overflow: hidden; }
 
 /* Stacked: each window stays tall enough to work in; the stack scrolls and the next one peeks in. */
 .wins.layout-stack { overflow-y: auto; grid-auto-rows: minmax(max(420px, 65%), 1fr); padding-bottom: 2px; }
+
+/* Paused: the whole row resumes */
+.mini.resumable { width: 100%; border: 0; border-bottom: 1px solid var(--edge); background: none; text-align: left; font: inherit; color: inherit; }
+.mini.resumable:disabled { cursor: default; }
+.resume-hint { font-size: 13.5px; color: var(--muted); padding: 6px 8px; }

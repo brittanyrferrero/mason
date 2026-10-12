@@ -154,14 +154,20 @@ app.whenReady().then(() => {
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
+  // Which Mason shell a running copy is in: Claude's own record of its tmux pane, else matching the terminal.
+  const hostFor = (c: { tty?: string; tmux?: string }): string | undefined => {
+    const hosted = listHosted()
+    return (c.tmux && hosted.find((h) => h.name === c.tmux)?.name) || (c.tty ? hosted.find((h) => h.tty === c.tty)?.name : undefined)
+  }
+
   ipcMain.handle('session:open', async (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string') return { ok: false }
     if (id.startsWith('tmux:')) return { host: id.slice(5) }
     const live = readLive().get(id)
-    if (!live?.tty) return { ok: false }
-    const host = listHosted().find((h) => h.tty === live.tty)?.name
+    if (!live) return { ok: false }
+    const host = hostFor(live)
     if (host) return { host }
-    return { ok: await focusTerminalTab(live.tty) }
+    return { ok: !!live.tty && (await focusTerminalTab(live.tty)) }
   })
 
   // New Claude session in a project's folder, hosted inside Mason.
@@ -177,7 +183,12 @@ app.whenReady().then(() => {
   // Pick a closed session back up, inside Mason.
   ipcMain.handle('session:resume', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id)) return { error: 'bad request' }
-    if (readLive().has(id)) return { error: 'That session is already running.' }
+    // Already running: open it rather than starting a second copy.
+    const live = readLive().get(id)
+    if (live) {
+      const host = hostFor(live)
+      return host ? { host } : { error: 'It’s already running in a Terminal window. Use “Move here” to bring it in.' }
+    }
     // Mason already has a shell for it (maybe Claude is still starting there): show that instead of starting another copy.
     const shell = listHosted().find((h) => h.resume === id && peek(h.name) !== 'shell')
     if (shell) return { host: shell.name }
@@ -229,7 +240,7 @@ app.whenReady().then(() => {
     } else {
       const live = readLive().get(id)
       if (!live) return false
-      const host = live.tty ? listHosted().find((h) => h.tty === live.tty)?.name : undefined
+      const host = hostFor(live)
       if (host) {
         term.detach(host)
         endSession(host)

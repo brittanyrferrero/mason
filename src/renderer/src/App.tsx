@@ -579,7 +579,7 @@ export function App() {
             {foot === 'paused' && (
               <div className="foot-panel">
                 {state.paused.map((p) => (
-                  <div className="mini" key={p.id}>
+                  <button className="mini resumable" type="button" key={p.id} disabled={!state.canHost} onClick={() => resume(p.id)} title="Resume it inside Mason">
                     <div className="mini-text">
                       <span className="mini-title">
                         {p.title}
@@ -593,14 +593,8 @@ export function App() {
                         </span>
                       )}
                     </div>
-                    {state.canHost && (
-                      <span className="acts">
-                        <button type="button" onClick={() => resume(p.id)}>
-                          Resume
-                        </button>
-                      </span>
-                    )}
-                  </div>
+                    {state.canHost && <span className="acts resume-hint">Resume</span>}
+                  </button>
                 ))}
               </div>
             )}

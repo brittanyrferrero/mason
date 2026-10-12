@@ -27,7 +27,7 @@ export type AppState = {
 
 // Closed sessions from the last month are resumable; only the most recent few are shown to keep the panel short.
 const RECENT_MS = 30 * 24 * 60 * 60 * 1000
-const PAUSED_LIMIT = 10
+const PAUSED_LIMIT = 25
 
 function oneLine(text: string | null, max = 140): string {
   if (!text) return ''
@@ -70,6 +70,8 @@ export function buildState(
     .all(Date.now() - RECENT_MS, JSON.stringify([...live.keys()])) as Row[]
 
   const hostByTty = new Map(hosted.map((h) => [h.tty, h.name]))
+  const hostNames = new Set(hosted.map((h) => h.name))
+  const hostOf = (c: { tty?: string; tmux?: string }) => (c.tmux && hostNames.has(c.tmux) ? c.tmux : (c.tty && hostByTty.get(c.tty)) || null)
   const claimed = new Set<string>()
   const prefs = new Map(
     (db.prepare('SELECT session_id, name, pinned FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number }[]).map((p) => [p.session_id, p])
@@ -98,9 +100,25 @@ export function buildState(
       })
       continue
     }
-    const host = (l.tty && hostByTty.get(l.tty)) || null
+    const host = hostOf(l)
     if (host) claimed.add(host)
     const need = needs.get(r.id)
+    // Further copies of the same conversation in Mason get their own row, so you can open or end each one.
+    for (const c of l.extra) {
+      const h = hostOf(c)
+      if (!h) continue
+      claimed.add(h)
+      add(r.project_id, r.project, {
+        id: `tmux:${h}`,
+        title: title(r),
+        now: 'Another copy of this conversation. End the ones you don’t need.',
+        status: c.status,
+        branch: null,
+        lastActivity: r.last_activity ?? 0,
+        host: h,
+        pinned: false
+      })
+    }
     add(r.project_id, r.project, {
       id: r.id,
       title: title(r),
@@ -116,7 +134,7 @@ export function buildState(
   // A brand-new Claude has no transcript for a moment; still show the row so "+ New session" feels instant.
   for (const [id, l] of live) {
     if (seen.has(id) || !l.cwd) continue
-    const host = (l.tty && hostByTty.get(l.tty)) || null
+    const host = hostOf(l)
     if (host) claimed.add(host)
     const p = projectFor(l.cwd)
     const need = needs.get(id)
