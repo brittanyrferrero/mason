@@ -959,7 +959,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
   )
 }
 
-// Editing a note: Enter is a new line; ⌘↵, Esc, or clicking away saves (a note is never thrown away by accident).
+// Editing a note: Enter saves, Shift+Enter is a new line; Esc or clicking away also saves (never thrown away by accident).
 // Clearing it removes the note.
 function NoteEdit({ initial, label, onDone }: { initial: string; label: string; onDone: (body: string | null) => void }) {
   const settled = useRef(false)
@@ -980,12 +980,12 @@ function NoteEdit({ initial, label, onDone }: { initial: string; label: string; 
       defaultValue={initial}
       maxLength={20000}
       aria-label={label}
-      placeholder="A note for future you… (⌘↵ or click away to save)"
+      placeholder="A note for future you… (Enter to save, Shift+Enter for a new line)"
       ref={(el) => el && grow(el)}
       onInput={(e) => grow(e.currentTarget)}
       onKeyDown={(e) => {
         e.stopPropagation()
-        if ((e.key === 'Enter' && e.metaKey) || e.key === 'Escape') {
+        if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') {
           e.preventDefault()
           finish(e.currentTarget.value)
         }
