@@ -7,7 +7,8 @@ import { DATA_DIR } from './db'
 // Mason runs its own private tmux server ("-L mason"), separate from any tmux you use yourself.
 // tmux keeps sessions alive when Mason's window closes or the app quits; Mason just attaches to them.
 export const TMUX = ['/opt/homebrew/bin/tmux', '/usr/local/bin/tmux', '/usr/bin/tmux'].find(existsSync) ?? null
-const SOCKET = 'mason'
+// MASON_TMUX_SOCKET is only for tests, so they never touch your real sessions.
+const SOCKET = process.env.MASON_TMUX_SOCKET || 'mason'
 const CONF = join(DATA_DIR, 'tmux.conf')
 
 const CONF_TEXT = `# Written by Mason. Invisible tmux: no status bar, no prefix key, so every keystroke goes to Claude.

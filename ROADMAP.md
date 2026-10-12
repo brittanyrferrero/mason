@@ -53,7 +53,7 @@ Not doing: time cues ("working 40 min") and nudges about sessions waiting too lo
 
 ## Later
 
-- [ ] Global hotkey to bring Mason forward from anywhere
-- [ ] Peek: enlarge a session over the list without opening it; answer a permission prompt from there
-- [ ] Reopen sessions after a Mac restart
-- [ ] Menu bar icon with the waiting count
+- [x] **Bring Mason forward** from anywhere with ⌃⌥M (press again to put it away)
+- [x] **Peek** (Space, or the eye on hover): the session enlarged over the list, live, so you can answer it right there
+- [x] **Reopen after a restart:** if tmux is gone when Mason starts, the sessions that were running in it are resumed in their folders
+- [x] **Menu bar icon** (m.) with the waiting count; its menu lists what's waiting (click to Peek), Quick capture, Open Mason

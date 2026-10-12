@@ -5,6 +5,7 @@ import { DATA_DIR, openDb, type DB } from './db'
 import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript } from './events'
 import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { TRAY_1X, TRAY_2X } from './trayIcon'
+import { rememberHostedIds, reopenAfterRestart } from './reopen'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
@@ -111,42 +112,9 @@ function createTray(): void {
   trayKey = ''
 }
 
-// ---- After a Mac restart, tmux is gone; reopen the sessions that were running in Mason ----
-const REOPEN_KEY = 'reopen'
-let lastHosted = ''
+// ---- After a Mac restart, tmux is gone; reopen the sessions that were running in Mason (see reopen.ts) ----
 function rememberHosted(s: ReturnType<typeof state>): void {
-  const ids = s.projects.flatMap((p) => p.sessions.filter((x) => x.host && !x.id.startsWith('tmux:')).map((x) => x.id)).sort()
-  const key = JSON.stringify(ids)
-  if (key === lastHosted) return
-  lastHosted = key
-  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
-    REOPEN_KEY,
-    JSON.stringify({ at: Date.now(), ids })
-  )
-}
-function reopenAfterRestart(): number {
-  if (listHosted().length) return 0 // tmux survived (Mason just quit or crashed): everything is still there
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(REOPEN_KEY) as { value: string } | undefined
-  if (!row) return 0
-  let saved: { at: number; ids: string[] }
-  try {
-    saved = JSON.parse(row.value)
-  } catch {
-    return 0
-  }
-  if (!Array.isArray(saved.ids) || Date.now() - saved.at > 7 * 24 * 60 * 60_000) return 0
-  const live = readLive()
-  let n = 0
-  for (const id of saved.ids) {
-    if (!SESSION_ID_RE.test(id) || live.has(id)) continue
-    const r = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
-    if (!r?.cwd || !existsSync(r.cwd)) continue
-    try {
-      startSession(r.cwd, id)
-      n++
-    } catch {}
-  }
-  return n
+  rememberHostedIds(db, s.projects.flatMap((p) => p.sessions.filter((x) => x.host && !x.id.startsWith('tmux:')).map((x) => x.id)))
 }
 
 const waitForExit = async (pid: number, ms: number) => {
@@ -474,7 +442,7 @@ app.whenReady().then(() => {
     return true
   })
   ipcMain.on('capture:close', (e) => trusted(e) && closeCapture(true))
-  if (!globalShortcut.register(CAPTURE_SHORTCUT, openCapture)) console.warn(`Couldn't claim ${CAPTURE_SHORTCUT} for quick capture; another app has it.`)
+  if (!DEV_CHECK && !globalShortcut.register(CAPTURE_SHORTCUT, openCapture)) console.warn(`Couldn't claim ${CAPTURE_SHORTCUT} for quick capture; another app has it.`)
 
   ipcMain.handle('handoff:edit', (e, id: unknown, brief: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof brief !== 'string') return false
@@ -568,15 +536,15 @@ app.whenReady().then(() => {
   setTimeout(summarize, 15_000)
   setInterval(summarize, 60_000)
 
-  const reopened = reopenAfterRestart()
+  const reopened = DEV_CHECK ? 0 : reopenAfterRestart(db)
   createWindow()
-  createTray()
+  if (!DEV_CHECK) createTray()
   pushState()
   if (reopened)
     win?.webContents.once('did-finish-load', () =>
       setTimeout(() => send('mason:notice', `Reopened ${reopened} session${reopened > 1 ? 's' : ''} from before your Mac restarted.`), 800)
     )
-  if (!globalShortcut.register(SHOW_SHORTCUT, toggleMason)) console.warn(`Couldn't claim ${SHOW_SHORTCUT}; another app has it.`)
+  if (!DEV_CHECK && !globalShortcut.register(SHOW_SHORTCUT, toggleMason)) console.warn(`Couldn't claim ${SHOW_SHORTCUT}; another app has it.`)
   // The quick-capture panel counts as a window, so check for the main one specifically.
   app.on('activate', () => !win && createWindow())
 })
