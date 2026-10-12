@@ -49,6 +49,17 @@ const ShushIcon = () => (
     <path d="m22 9-6 6M16 9l6 6" />
   </svg>
 )
+const PinIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+  </svg>
+)
+const PencilIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+  </svg>
+)
 const KeyboardIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
@@ -70,6 +81,8 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Move', ['↑', '↓']],
       ['Open', ['↵']],
       ['Open all', ['A']],
+      ['Rename', ['R']],
+      ['Pin', ['P']],
       ['Shush', ['S']],
       ['Show this', ['?']]
     ]
@@ -114,6 +127,7 @@ export function App() {
   const [opened, setOpened] = useState<Set<number>>(new Set())
   const [cursor, setCursor] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
   const [foot, setFoot] = useState<'paused' | 'ideas' | null>(null)
@@ -264,6 +278,14 @@ export function App() {
     setLayout((l) => (l === 'one' ? lastMulti.current : 'one'))
   }
 
+  // Rename and pin need a real Claude session id (not a bare Mason shell).
+  const hasPrefs = (s: SessionView) => !s.id.startsWith('tmux:')
+  const rename = (s: SessionView, name: string) => {
+    setRenaming(null)
+    if (name.trim() !== s.title) window.mason.rename(s.id, name)
+  }
+  const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && (e.key === '1' || e.key === '2')) {
@@ -285,12 +307,15 @@ export function App() {
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
       if (view === 'open' || e.metaKey || e.ctrlKey || e.altKey) return
+      if ((e.target as Element).closest?.('input, textarea')) return
       const k = e.key.toLowerCase()
       if (e.key === '?') return e.preventDefault(), setKeysOpen((v) => !v)
       if (e.key === 'Escape') return setKeysOpen(false), setCursor(null), setConfirming(null)
       if (k === 's') return setShushed((v) => !v)
       if (k === 'a') return openAll(allSessions.map(({ s }) => s))
       const sel = visibleRows.find((s) => s.id === cursor)
+      if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
+      if (k === 'p' && sel) return pin(sel)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
         e.preventDefault()
@@ -483,7 +508,11 @@ export function App() {
                         cursor={cursor === s.id}
                         note={rowNote?.id === s.id ? rowNote.note : null}
                         confirming={confirming === s.id}
+                        renaming={renaming === s.id}
                         canHost={!!state.canHost}
+                        onRename={hasPrefs(s) ? () => setRenaming(s.id) : undefined}
+                        onRenamed={(name) => (name === null ? setRenaming(null) : rename(s, name))}
+                        onPin={hasPrefs(s) ? () => pin(s) : undefined}
                         onOpen={() => open(s)}
                         onMove={() => move(s.id)}
                         onEnd={() => setConfirming(s.id)}
@@ -577,7 +606,11 @@ type RowProps = {
   cursor: boolean
   note: Note | null
   confirming: boolean
+  renaming: boolean
   canHost: boolean
+  onRename?: () => void
+  onRenamed: (name: string | null) => void // null: cancelled
+  onPin?: () => void
   onOpen: () => void
   onMove: () => void
   onEnd: () => void
@@ -585,8 +618,17 @@ type RowProps = {
   onCancelEnd: () => void
 }
 
-function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
+function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
+  const settled = useRef(false) // Enter or Esc already decided; the blur that follows shouldn't save again
+  useEffect(() => {
+    if (renaming) settled.current = false
+  }, [renaming])
+  const finish = (name: string | null) => {
+    if (settled.current) return
+    settled.current = true
+    onRenamed(name)
+  }
   const endHint = s.id.startsWith('tmux:')
     ? 'Close this Mason shell (Claude isn’t running in it)'
     : inTerminal
@@ -595,15 +637,43 @@ function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onCo
   return (
     <div className={`item ${cursor ? 'cursor' : ''}`}>
       <div className="row">
-        <button className="main-btn" type="button" onClick={onOpen} title={inTerminal ? 'Bring its Terminal window to the front' : 'Open'}>
-          <span className="title">
-            <span className={`dot ${s.status}`} />
-            {s.title}
-            {s.status === 'needs' && <span className="tag">waiting</span>}
-            {inTerminal && <span className="where">in Terminal</span>}
+        {renaming ? (
+          <span className="main-btn">
+            <span className="title">
+              <span className={`dot ${s.status}`} />
+              <input
+                className="rename"
+                autoFocus
+                defaultValue={s.title}
+                maxLength={80}
+                aria-label="Session name (leave empty to use Claude’s title)"
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') finish(e.currentTarget.value)
+                  if (e.key === 'Escape') finish(null)
+                }}
+                onBlur={(e) => finish(e.currentTarget.value)}
+              />
+            </span>
+            {s.now && <span className="now">{s.now}</span>}
           </span>
-          {note ? <span className={`toast ${note.tone}`}>{note.text}</span> : s.now && <span className="now">{s.now}</span>}
-        </button>
+        ) : (
+          <button className="main-btn" type="button" onClick={onOpen} title={inTerminal ? 'Bring its Terminal window to the front' : 'Open'}>
+            <span className="title">
+              <span className={`dot ${s.status}`} />
+              <span className="title-text">{s.title}</span>
+              {s.pinned && (
+                <span className="pinned" title="Pinned">
+                  <PinIcon />
+                </span>
+              )}
+              {s.status === 'needs' && <span className="tag">waiting</span>}
+              {inTerminal && <span className="where">in Terminal</span>}
+            </span>
+            {note ? <span className={`toast ${note.tone}`}>{note.text}</span> : s.now && <span className="now">{s.now}</span>}
+          </button>
+        )}
         {confirming ? (
           <span className="acts confirming">
             <span className="ask">End it?</span>
@@ -616,6 +686,16 @@ function Row({ s, cursor, note, confirming, canHost, onOpen, onMove, onEnd, onCo
           </span>
         ) : (
           <span className="acts">
+            {onRename && (
+              <button className="icon" type="button" onClick={onRename} aria-label="Rename" title="Rename (R)">
+                <PencilIcon />
+              </button>
+            )}
+            {onPin && (
+              <button className="icon" type="button" onClick={onPin} aria-label={s.pinned ? 'Unpin' : 'Pin'} title={s.pinned ? 'Unpin (P)' : 'Pin to the top of its project (P)'}>
+                <PinIcon />
+              </button>
+            )}
             {inTerminal && canHost && (
               <button type="button" onClick={onMove} title="Stop it in Terminal and continue the same conversation inside Mason">
                 Move here

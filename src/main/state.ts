@@ -13,6 +13,7 @@ export type SessionView = {
   branch: string | null
   lastActivity: number
   host: string | null // tmux session name when it lives inside Mason; null when it's in a Terminal window
+  pinned: boolean
 }
 
 export type PausedView = { id: string; title: string; project: string; pickUp: string; lastActivity: number }
@@ -70,7 +71,11 @@ export function buildState(
 
   const hostByTty = new Map(hosted.map((h) => [h.tty, h.name]))
   const claimed = new Set<string>()
-  const title = (r: Row) => r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
+  const prefs = new Map(
+    (db.prepare('SELECT session_id, name, pinned FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number }[]).map((p) => [p.session_id, p])
+  )
+  const pinned = (id: string) => !!prefs.get(id)?.pinned
+  const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>) => prefs.get(r.id)?.name || r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
   const byProject = new Map<number, { id: number; name: string; sessions: SessionView[] }>()
   const add = (pid: number, name: string, s: SessionView) => {
     if (!byProject.has(pid)) byProject.set(pid, { id: pid, name, sessions: [] })
@@ -103,7 +108,8 @@ export function buildState(
       status: need ? 'needs' : l.status,
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
-      host
+      host,
+      pinned: pinned(r.id)
     })
   }
 
@@ -114,34 +120,37 @@ export function buildState(
     if (host) claimed.add(host)
     const p = projectFor(l.cwd)
     const need = needs.get(id)
-    add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host })
+    add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host, pinned: pinned(id) })
   }
   // Mason shells where Claude isn't running: still starting, stuck on its first question, or exited.
   for (const h of hosted) {
     if (claimed.has(h.name)) continue
     const p = projectFor(h.cwd)
-    const r = h.resume ? (db.prepare('SELECT ai_title, first_prompt FROM sessions WHERE id = ?').get(h.resume) as Pick<Row, 'ai_title' | 'first_prompt'> | undefined) : undefined
+    const r = h.resume ? (db.prepare('SELECT id, ai_title, first_prompt FROM sessions WHERE id = ?').get(h.resume) as Pick<Row, 'id' | 'ai_title' | 'first_prompt'> | undefined) : undefined
     const seen = peek(h.name)
     add(p.id, p.name, {
       id: `tmux:${h.name}`,
-      title: (r && (r.ai_title || oneLine(r.first_prompt, 60))) || 'New session',
+      title: r ? title(r) : 'New session',
       now: seen === 'trust' ? 'Asking whether to trust this folder' : seen === 'shell' ? 'Claude isn’t running here' : 'Starting Claude…',
       status: seen === 'trust' ? 'needs' : 'idle',
       branch: null,
       lastActivity: h.created,
-      host: h.name
+      host: h.name,
+      pinned: false
     })
   }
 
   const ideas = db
     .prepare(
-      `SELECT n.id, n.body, COALESCE(s.ai_title, 'a session') AS "from" FROM notes n LEFT JOIN sessions s ON s.id = n.session_id
+      `SELECT n.id, n.body, COALESCE(sp.name, s.ai_title, 'a session') AS "from" FROM notes n
+       LEFT JOIN sessions s ON s.id = n.session_id LEFT JOIN session_prefs sp ON sp.session_id = n.session_id
        WHERE n.kind = 'idea' ORDER BY n.created_at DESC`
     )
     .all() as AppState['ideas']
 
-  // Anything waiting on you comes first in its project.
+  // Pinned sessions lead their project; within that, anything waiting on you comes first.
   const projects = [...byProject.values()]
-  for (const p of projects) p.sessions.sort((a, b) => Number(b.status === 'needs') - Number(a.status === 'needs'))
+  const rank = (s: SessionView) => (s.pinned ? 2 : 0) + (s.status === 'needs' ? 1 : 0)
+  for (const p of projects) p.sessions.sort((a, b) => rank(b) - rank(a))
   return { projects, paused, ideas, canHost }
 }

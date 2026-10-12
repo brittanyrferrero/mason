@@ -77,6 +77,12 @@ export function openDb(): DB {
       payload    TEXT,
       created_at INTEGER NOT NULL
     );
+    -- Your own name and pin for a session. Kept apart from sessions so re-reading transcripts never undoes them.
+    CREATE TABLE IF NOT EXISTS session_prefs (
+      session_id TEXT PRIMARY KEY,
+      name       TEXT,
+      pinned     INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL

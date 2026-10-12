@@ -205,6 +205,21 @@ app.whenReady().then(() => {
     return { host }
   })
 
+  // Your own name for a session (empty clears it, back to Claude's title) and whether it's pinned.
+  ipcMain.handle('session:rename', (e, id: unknown, name: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof name !== 'string') return false
+    const clean = name.replace(/\s+/g, ' ').trim().slice(0, 80)
+    db.prepare('INSERT INTO session_prefs (session_id, name) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET name = excluded.name').run(id, clean || null)
+    pushState()
+    return true
+  })
+  ipcMain.handle('session:pin', (e, id: unknown, pinned: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof pinned !== 'boolean') return false
+    db.prepare('INSERT INTO session_prefs (session_id, pinned) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET pinned = excluded.pinned').run(id, pinned ? 1 : 0)
+    pushState()
+    return true
+  })
+
   // End: close a Mason session, or stop Claude in a Terminal window (the window itself stays).
   ipcMain.handle('session:end', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string') return false

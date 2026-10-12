@@ -16,6 +16,8 @@ const api = {
   resume: (id: string): Promise<HostResult> => ipcRenderer.invoke('session:resume', id),
   move: (id: string): Promise<HostResult> => ipcRenderer.invoke('session:move', id),
   end: (id: string): Promise<boolean> => ipcRenderer.invoke('session:end', id),
+  rename: (id: string, name: string): Promise<boolean> => ipcRenderer.invoke('session:rename', id, name),
+  pin: (id: string, pinned: boolean): Promise<boolean> => ipcRenderer.invoke('session:pin', id, pinned),
 
   attach: (name: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('term:attach', name, cols, rows),
   input: (name: string, data: string) => ipcRenderer.send('term:input', name, data),

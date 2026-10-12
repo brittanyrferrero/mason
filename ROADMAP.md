@@ -26,7 +26,7 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 
 ## Now (in this order)
 
-- [ ] **Rename and pin.** Give a session your own name; pinned sessions float to the top of their project.
+- [x] **Rename and pin.** Give a session your own name (R, or the pencil on hover); pinned sessions (P) lead their project.
 - [ ] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
       a two-line "where was I?" recap: what you were doing and the next step. Can be turned off.
 - [ ] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
