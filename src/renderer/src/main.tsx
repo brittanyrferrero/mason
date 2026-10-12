@@ -6,9 +6,10 @@ import '@fontsource/figtree/500.css'
 import '@fontsource/figtree/600.css'
 import './styles.css'
 import { App } from './App'
+import { Capture } from './Capture'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {location.hash === '#capture' ? <Capture /> : <App />}
   </StrictMode>
 )

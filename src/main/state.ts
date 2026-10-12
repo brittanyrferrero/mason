@@ -36,7 +36,10 @@ export type PausedView = {
 export type AppState = {
   projects: { id: number; name: string; sessions: SessionView[]; myNote?: string }[]
   paused: PausedView[]
-  ideas: { id: number; body: string; from: string }[]
+  // Things you parked: /stash in Claude, or quick capture (⌃⌥N). Newest first.
+  saved: { id: number; kind: 'message' | 'idea' | 'later'; body: string; from: string | null; at: number }[]
+  // Sessions that wrapped up today, for a quick "what did I get done?"
+  doneToday: { id: string; title: string; project: string; what: string }[]
   canHost: boolean
   summaries: boolean
   scratch: string
@@ -237,18 +240,27 @@ export function buildState(
     })
   }
 
-  const ideas = db
-    .prepare(
-      `SELECT n.id, n.body, COALESCE(sp.name, s.ai_title, 'a session') AS "from" FROM notes n
-       LEFT JOIN sessions s ON s.id = n.session_id LEFT JOIN session_prefs sp ON sp.session_id = n.session_id
-       WHERE n.kind = 'idea' ORDER BY n.created_at DESC`
-    )
-    .all() as AppState['ideas']
+  const saved = (
+    db
+      .prepare(
+        `SELECT n.id, n.kind, n.body, n.created_at AS at, n.session_id FROM notes n ORDER BY n.created_at DESC LIMIT 200`
+      )
+      .all() as { id: number; kind: string; body: string; at: number; session_id: string | null }[]
+  ).map((n) => {
+    const s = n.session_id ? (db.prepare('SELECT id, ai_title, first_prompt FROM sessions WHERE id = ?').get(n.session_id) as Pick<Row, 'id' | 'ai_title' | 'first_prompt'> | undefined) : undefined
+    return { id: n.id, kind: (['message', 'idea', 'later'].includes(n.kind) ? n.kind : 'idea') as 'message' | 'idea' | 'later', body: n.body, at: n.at, from: s ? title(s) : null }
+  })
+
+  const midnight = new Date()
+  midnight.setHours(0, 0, 0, 0)
+  const doneToday = paused
+    .filter((p) => p.lastActivity >= midnight.getTime())
+    .map((p) => ({ id: p.id, title: p.title, project: p.project, what: p.pickUp }))
 
   // Pinned sessions lead their project; within that, anything waiting on you comes first.
   const projects = [...byProject.values()]
   const rank = (s: SessionView) => (s.pinned ? 2 : 0) + (s.status === 'needs' ? 1 : 0)
   for (const p of projects) p.sessions.sort((a, b) => rank(b) - rank(a))
   for (const p of projects) p.myNote = myNotes.get(`p:${p.id}`)
-  return { projects, paused, ideas, canHost, summaries: summariesOn(db), scratch: myNotes.get('scratch') ?? '' }
+  return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), scratch: myNotes.get('scratch') ?? '' }
 }

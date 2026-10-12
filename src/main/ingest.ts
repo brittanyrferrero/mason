@@ -20,7 +20,7 @@ type Patch = {
 }
 
 // Pull plain text out of a message's content (a string or an array of blocks).
-function textOf(content: unknown): string {
+export function textOf(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content

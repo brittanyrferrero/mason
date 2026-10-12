@@ -83,12 +83,6 @@ const SearchIcon = () => (
     <path d="m20 20-3.5-3.5" />
   </svg>
 )
-const KeyboardIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
-    <path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8" />
-  </svg>
-)
 
 const SHORTCUTS: [string, [string, string[]][]][] = [
   [
@@ -132,6 +126,21 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
   ]
 ]
 
+// The help card: the things you can't discover by looking (commands typed inside Claude, the global hotkey,
+// what the colours mean), then the keyboard shortcuts.
+const DOTS: [string, string][] = [
+  ['working', 'Claude is working'],
+  ['needs', 'Waiting on you: a question or a permission prompt'],
+  ['idle', 'Quiet: done for now, or waiting for your next message']
+]
+const IN_CLAUDE: [string, string][] = [
+  ['/stash', 'Keep Claude’s last reply in Saved'],
+  ['/stash 2', 'Keep the reply before that'],
+  ['/stash idea …', 'Park a thought to come back to'],
+  ['/stash later …', 'A note for future you'],
+  ['/pause', 'Claude writes a handoff, then the session stops']
+]
+
 const SORTS: [Sort, string][] = [
   ['project', 'by project'],
   ['waiting', 'waiting first'],
@@ -161,7 +170,7 @@ export function App() {
   const [ending, setEnding] = useState<string | null>(null) // Open-tab window asking "End this session?"
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
-  const [foot, setFoot] = useState<'paused' | 'ideas' | 'scratch' | null>(null)
+  const [foot, setFoot] = useState<'paused' | 'saved' | 'done' | 'scratch' | null>(null)
   // Notes you've tucked away ('s:<id>' / 'p:<id>'); the pen brings them back. Remembered on this Mac.
   const [tucked, setTucked] = useState<Set<string>>(() => {
     try {
@@ -524,11 +533,37 @@ export function App() {
         <button className="tab" role="tab" type="button" aria-selected={view === 'open'} disabled={!windows.length} onClick={() => setView('open')}>
           Open <span className="count">{windows.length}</span>
         </button>
-        <button className="keys-btn" type="button" aria-expanded={keysOpen} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={() => setKeysOpen((v) => !v)}>
-          <KeyboardIcon />
+        <button className="keys-btn" type="button" aria-expanded={keysOpen} aria-label="Help and shortcuts" title="Help and shortcuts (?)" onClick={() => setKeysOpen((v) => !v)}>
+          <span className="help-q">?</span>
         </button>
         {keysOpen && (
-          <div className="keys-pop" role="dialog" aria-label="Keyboard shortcuts">
+          <div className="keys-pop" role="dialog" aria-label="Help and keyboard shortcuts">
+            <h4>The dots</h4>
+            {DOTS.map(([kind, label]) => (
+              <div key={kind} className="help-row">
+                <span className="help-dot">
+                  <span className={`dot ${kind}`} />
+                </span>
+                <span>{label}</span>
+              </div>
+            ))}
+            <h4>Type these in any Claude session</h4>
+            {IN_CLAUDE.map(([cmd, label]) => (
+              <div key={cmd} className="help-row">
+                <code>{cmd}</code>
+                <span>{label}</span>
+              </div>
+            ))}
+            <p className="help-note">They’re saved without Claude taking a turn. Find them under Saved, at the bottom of Projects.</p>
+            <h4>From any app</h4>
+            <div>
+              <span>Quick capture a thought</span>
+              <span>
+                <kbd>⌃</kbd>
+                <kbd>⌥</kbd>
+                <kbd>N</kbd>
+              </span>
+            </div>
             {SHORTCUTS.map(([section, rows]) => (
               <Fragment key={section}>
                 <h4>{section}</h4>
@@ -857,11 +892,20 @@ export function App() {
                   {state.paused.length} paused
                 </button>
               )}
-              {state.ideas.length > 0 && (
-                <button className="foot-btn" type="button" aria-expanded={foot === 'ideas'} onClick={() => setFoot(foot === 'ideas' ? null : 'ideas')}>
-                  {state.ideas.length} ideas saved
+              {state.doneToday.length > 0 && (
+                <button className="foot-btn" type="button" aria-expanded={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>
+                  {state.doneToday.length} done today
                 </button>
               )}
+              <button
+                className="foot-btn"
+                type="button"
+                aria-expanded={foot === 'saved'}
+                onClick={() => setFoot(foot === 'saved' ? null : 'saved')}
+                title="Things you parked with /stash in Claude, or ⌃⌥N from any app"
+              >
+                {state.saved.length ? `${state.saved.length} saved` : 'Saved'}
+              </button>
               <button className="foot-btn" type="button" aria-expanded={foot === 'scratch'} onClick={() => setFoot(foot === 'scratch' ? null : 'scratch')}>
                 Scratchpad
               </button>
@@ -929,13 +973,29 @@ export function App() {
                 ))}
               </div>
             )}
-            {foot === 'ideas' && (
+            {foot === 'saved' && (
               <div className="foot-panel">
-                {state.ideas.map((i) => (
-                  <div className="mini" key={i.id}>
+                {state.saved.length === 0 && (
+                  <p className="empty-help">
+                    Nothing parked yet. Type <code>/stash</code> in any Claude session to keep its last reply, or <code>/stash idea …</code> for a
+                    thought to come back to. From any app, <kbd>⌃</kbd><kbd>⌥</kbd><kbd>N</kbd> opens a quick capture box.
+                  </p>
+                )}
+                {state.saved.map((i) => (
+                  <SavedRow key={i.id} item={i} />
+                ))}
+              </div>
+            )}
+            {foot === 'done' && (
+              <div className="foot-panel">
+                {state.doneToday.map((d) => (
+                  <div className="mini" key={d.id}>
                     <div className="mini-text">
-                      <span className="mini-sub wrap">{i.body}</span>
-                      <span className="mini-sub">from {i.from}</span>
+                      <span className="mini-title">
+                        {d.title}
+                        <small>{d.project}</small>
+                      </span>
+                      {d.what && <span className="mini-sub" title={d.what}>{d.what}</span>}
                     </div>
                   </div>
                 ))}
@@ -1239,5 +1299,45 @@ function Pick<T extends string>({ label, value, options, onChange }: { label: st
         <path d="M6 9l6 6 6-6" />
       </svg>
     </label>
+  )
+}
+
+const KIND_LABEL = { message: 'Claude said', idea: 'Idea', later: 'Come back to' } as const
+
+// One parked item. Long ones fold to three lines; Copy and Remove sit on hover like everywhere else.
+function SavedRow({ item }: { item: AppState['saved'][number] }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const long = item.body.length > 220 || item.body.split('\n').length > 3
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(item.body)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+  return (
+    <div className="mini saved">
+      <div className="mini-text">
+        <span className="mini-sub">
+          <b className={`kind ${item.kind}`}>{KIND_LABEL[item.kind]}</b>
+          {item.from ? ` · from ${item.from}` : ''} · {ago(item.at)}
+        </span>
+        <span className={`saved-body ${long && !open ? 'clamped' : ''}`}>{item.body}</span>
+        {long && (
+          <button className="link" type="button" onClick={() => setOpen((v) => !v)}>
+            {open ? 'less' : 'more'}
+          </button>
+        )}
+      </div>
+      <span className="acts">
+        <button type="button" onClick={copy}>
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
+        <button className="end" type="button" onClick={() => window.mason.removeSaved(item.id)}>
+          Remove
+        </button>
+      </span>
+    </div>
   )
 }

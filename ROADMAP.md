@@ -38,12 +38,15 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 
 ## Next
 
-- [ ] **Quick capture.** A global hotkey opens a one-line box from any app; type, Enter, gone.
-      Lands in the inbox ("ideas saved") tagged with whatever session you were in.
-- [ ] **/stash** inside Claude: park a stray thought or side quest in Mason without derailing the session.
+- [x] **Quick capture.** ⌃⌥N opens a one-line box from any app; type, Enter, gone.
+      Lands in **Saved** tagged with the session you last typed into.
+- [x] **/stash** inside Claude: `/stash` keeps Claude's last reply, `/stash 2` the one before, `/stash idea …` and
+      `/stash later …` park a thought. A hook files it in **Saved** and blocks the prompt, so Claude never takes a turn.
+- [x] **Help card** (? top right): what the dots mean, the commands you can type inside Claude, the global hotkey,
+      then the keyboard shortcuts. The empty Saved list explains how to fill it.
 - [x] **Focus on one.** F (or the target on hover) puts a session first and dims the rest; "Focusing on …  Stop" up top.
 - [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
-- [ ] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
+- [x] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
 - [x] **Find** (/ or ⌘F): filters the live list as you type and searches every past conversation, any age; click to resume. `*` for starred.
 
 Not doing: time cues ("working 40 min") and nudges about sessions waiting too long.

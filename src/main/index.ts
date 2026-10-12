@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, nativeTheme, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { DATA_DIR, openDb, type DB } from './db'
-import { EVENTS_FILE, pruneNeeds, readEvents, writeHookScript } from './events'
+import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript } from './events'
+import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
@@ -69,6 +70,71 @@ function refreshSoon(reingest: boolean): void {
   }, 400)
 }
 
+// Quick capture: a one-line box from any app (⌃⌥N). Type, Enter, gone; it lands in "saved".
+export const CAPTURE_SHORTCUT = 'Control+Alt+N'
+let capture: BrowserWindow | null = null
+let captureFrom: string | null = null // the session you were last typing into
+let captureReturns = false // hide Mason again afterwards, so focus goes back to the app you were in
+
+function sessionTitle(sid: string): string {
+  const r = db
+    .prepare(`SELECT COALESCE(sp.name, su.title, s.ai_title, 'a session') AS t FROM sessions s
+              LEFT JOIN session_prefs sp ON sp.session_id = s.id LEFT JOIN summaries su ON su.session_id = s.id WHERE s.id = ?`)
+    .get(sid) as { t: string } | undefined
+  return r?.t ?? 'a session'
+}
+
+function openCapture(): void {
+  readEvents()
+  captureFrom = lastActiveSession(3 * 60 * 60_000)
+  if (captureFrom && !db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(captureFrom)) captureFrom = null
+  captureReturns = !(win?.isFocused() ?? false)
+  if (!capture || capture.isDestroyed()) {
+    capture = new BrowserWindow({
+      width: 560,
+      height: 76,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      fullscreenable: false,
+      show: false,
+      type: 'panel',
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        spellcheck: true
+      }
+    })
+    capture.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    capture.on('blur', () => closeCapture(false))
+    if (DEV_URL) capture.loadURL(DEV_URL + '#capture')
+    else capture.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'capture' })
+  }
+  const c = capture
+  const show = () => {
+    c.center()
+    const [x, y] = c.getPosition()
+    c.setPosition(x, Math.max(80, Math.round(y * 0.45)))
+    c.webContents.send('capture:show', captureFrom ? sessionTitle(captureFrom) : null)
+    c.show()
+    c.focus()
+  }
+  if (c.webContents.isLoading()) c.webContents.once('did-finish-load', show)
+  else show()
+}
+
+function closeCapture(returnFocus: boolean): void {
+  if (!capture || capture.isDestroyed() || !capture.isVisible()) return
+  capture.hide()
+  if (returnFocus && captureReturns) app.hide()
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1080,
@@ -102,7 +168,7 @@ function createWindow(): void {
         // Wait until the list has rendered before pressing anything.
         for (let i = 0; i < 40 && !(await win!.webContents.executeJavaScript(`!!document.querySelector('.proj')`)); i++) await new Promise((r) => setTimeout(r, 250))
         for (const key of keys) {
-          const r = await win!.webContents.executeJavaScript(`(${JSON.stringify(key)} === "!" ? document.querySelector(".pill").click() : window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))); document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length`)
+          const r = await win!.webContents.executeJavaScript(`(${JSON.stringify(key)} === "!" ? document.querySelector(".pill").click() : ${JSON.stringify(key)} === "~" ? [...document.querySelectorAll(".foot-btn")].find((b) => /saved|Saved/.test(b.textContent)).click() : window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))); document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length`)
           console.log('[snapshot] after key', key, r)
           await new Promise((r) => setTimeout(r, 2500))
           console.log('[snapshot] later', await win!.webContents.executeJavaScript(`document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length + ' hidden=' + document.querySelector('.desk')?.hidden`))
@@ -155,6 +221,7 @@ app.whenReady().then(() => {
   initTmux()
   writeHookScript()
   writePauseScript()
+  writeStashCommand()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
@@ -284,6 +351,31 @@ app.whenReady().then(() => {
   }
   takePauses()
 
+  // /stash from inside Claude, filed into "saved".
+  const takeStashed = () => takeStashes(db) && refreshSoon(false)
+  takeStashed()
+  try {
+    watch(STASH_DIR, (_ev, f) => f?.endsWith('.json') && setTimeout(takeStashed, 300))
+  } catch {}
+  setInterval(takeStashed, 20_000) // one waiting for its transcript to be read in
+
+  ipcMain.handle('saved:remove', (e, id: unknown) => {
+    if (!trusted(e) || !Number.isInteger(id)) return false
+    db.prepare('DELETE FROM notes WHERE id = ?').run(id)
+    refreshSoon(false)
+    return true
+  })
+
+  ipcMain.handle('capture:save', (e, text: unknown) => {
+    if (!trusted(e) || typeof text !== 'string' || !text.trim()) return false
+    db.prepare("INSERT INTO notes (session_id, kind, body, created_at) VALUES (?, 'idea', ?, ?)").run(captureFrom, text.trim().slice(0, 5000), Date.now())
+    closeCapture(true)
+    refreshSoon(false)
+    return true
+  })
+  ipcMain.on('capture:close', (e) => trusted(e) && closeCapture(true))
+  if (!globalShortcut.register(CAPTURE_SHORTCUT, openCapture)) console.warn(`Couldn't claim ${CAPTURE_SHORTCUT} for quick capture; another app has it.`)
+
   ipcMain.handle('handoff:edit', (e, id: unknown, brief: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof brief !== 'string') return false
     const ok = editHandoff(db, id, brief)
@@ -378,11 +470,13 @@ app.whenReady().then(() => {
 
   createWindow()
   pushState()
-  app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
+  // The quick-capture panel counts as a window, so check for the main one specifically.
+  app.on('activate', () => !win && createWindow())
 })
 
 // Quitting Mason only detaches; your sessions keep running in tmux and reappear next launch.
 app.on('before-quit', () => term.detachAll())
+app.on('will-quit', () => globalShortcut.unregisterAll())
 
 // Mason is a place you keep open; closing the window on macOS leaves it in the Dock.
 app.on('window-all-closed', () => {

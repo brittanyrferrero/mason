@@ -27,6 +27,18 @@ const api = {
   search: (query: string): Promise<FoundView[]> => ipcRenderer.invoke('session:search', query),
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
+  removeSaved: (id: number): Promise<boolean> => ipcRenderer.invoke('saved:remove', id),
+
+  // Quick capture (its own little window).
+  captureSave: (text: string): Promise<boolean> => ipcRenderer.invoke('capture:save', text),
+  captureClose: () => ipcRenderer.send('capture:close'),
+  onCaptureShow: (cb: (from: string | null) => void) => {
+    const listener = (_e: IpcRendererEvent, from: string | null) => cb(from)
+    ipcRenderer.on('capture:show', listener)
+    return () => {
+      ipcRenderer.removeListener('capture:show', listener)
+    }
+  },
 
   attach: (name: string, cols: number, rows: number): Promise<boolean> => ipcRenderer.invoke('term:attach', name, cols, rows),
   input: (name: string, data: string) => ipcRenderer.send('term:input', name, data),

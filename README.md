@@ -8,7 +8,8 @@ A local macOS desktop app (Electron). It has no network port and nothing leaves 
 
 ```sh
 npm install      # once (also needs: brew install tmux)
-npm run dist     # build Mason.app into dist/mac-arm64/, then copy it to ~/Applications
+scripts/install-app.sh   # build Mason.app, quit the running one (sessions keep going), swap it in, reopen
+npm run dist     # just build Mason.app into dist/mac-arm64/
 npm start        # run from source without packaging
 npm run dev      # hot-reloading dev mode while working on the UI
 ```
@@ -24,7 +25,7 @@ window forward; "Move here" stops it there and resumes the same conversation ins
 
 ## "Waiting on you"
 
-`node scripts/hooks.mjs install` adds Claude Code hooks to `~/.claude/settings.json` (backup in `~/.mason/backups/`). It also adds the `/pause` command (`~/.claude/commands/pause.md`): Claude writes a handoff note, Mason files it on the paused list and stops the session.
+`node scripts/hooks.mjs install` adds Claude Code hooks to `~/.claude/settings.json` (backup in `~/.mason/backups/`). It also adds two commands to `~/.claude/commands`: `/pause` (Claude writes a handoff note; Mason files it on the paused list and stops the session) and `/stash` (the hook files Claude's last reply, or `idea …` / `later …`, into Saved and blocks the prompt, so it costs no turn).
 They run `~/.mason/hook.sh`, which appends one short line per event to `~/.mason/events.jsonl` — no network.
 Permission prompts and AskUserQuestion turn a session coral, sort it first, and badge the Dock.
 `node scripts/hooks.mjs uninstall` removes exactly those entries.
@@ -47,5 +48,4 @@ npx electron-vite build
 
 ## Status
 
-Step 3 of 5: live sessions inside Mason, busy/idle/waiting dots, Dock badge.
-Next: /stash, /pause, notes, summaries and auto-handoffs. The full plan is in [ROADMAP.md](ROADMAP.md).
+See [ROADMAP.md](ROADMAP.md) for what's done and what's next. The full plan is in [ROADMAP.md](ROADMAP.md).

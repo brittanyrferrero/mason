@@ -13,6 +13,17 @@ dir="$HOME/.mason"
 [ -d "$dir" ] || exit 0
 umask 077
 input=$(cat)
+# /stash: hand the prompt to Mason and block it, so Claude never sees it and it costs no turn.
+if [ "$1" = UserPromptSubmit ]; then
+  case "$input" in
+    *'"prompt":"/stash'*|*'"prompt": "/stash'*)
+      mkdir -p "$dir/stash"
+      tmp="$dir/stash/.$$"
+      printf '%s' "$input" > "$tmp" && mv "$tmp" "$dir/stash/$(date +%s).$$.json"
+      printf '%s\\n' '{"decision":"block","reason":"Saved to Mason ✓  (not sent to Claude)"}'
+      exit 0 ;;
+  esac
+fi
 field() { printf '%s' "$input" | sed -n "s/.*\\"$1\\" *: *\\"\\([^\\"\\\\\\\\]*\\)\\".*/\\1/p" | head -n 1 | tr -d '\\t\\r\\n'; }
 printf '%s\\t%s\\t%s\\t%s\\n' "$1" "$(field session_id)" "$(field notification_type)" "$(field message)" >> "$dir/events.jsonl" 2>/dev/null
 exit 0
@@ -26,6 +37,13 @@ export type Need = { since: number; message: string }
 
 const needs = new Map<string, Need>()
 let offset = 0
+// The session you last typed into, so a quick capture can say where the thought came from.
+// Only events seen while Mason is running count; replaying the log at startup doesn't.
+let caughtUp = false
+let lastPrompt: { sid: string; at: number } | null = null
+export function lastActiveSession(withinMs: number): string | null {
+  return lastPrompt && Date.now() - lastPrompt.at < withinMs ? lastPrompt.sid : null
+}
 
 function isWaiting(type: string, message: string): boolean {
   if (type === 'permission_prompt' || type === 'elicitation_dialog') return true
@@ -45,6 +63,9 @@ function apply(line: string): void {
       needs.set(sid, { since: Date.now(), message: 'Claude has a question for you' })
       break
     case 'UserPromptSubmit':
+      if (caughtUp) lastPrompt = { sid, at: Date.now() }
+      needs.delete(sid)
+      break
     case 'PostToolUse':
     case 'Stop':
     case 'SessionEnd':
@@ -67,6 +88,7 @@ export function readEvents(): Map<string, Need> {
     for (const line of buf.subarray(0, end).toString('utf8').split('\n')) if (line) apply(line)
     offset += end
   }
+  caughtUp = true
   if (offset > 1_000_000 && offset === size) {
     renameSync(EVENTS_FILE, EVENTS_FILE + '.old')
     offset = 0

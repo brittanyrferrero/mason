@@ -278,3 +278,33 @@ body:has(.view-open) { overflow: hidden; }
 .find-input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); outline: none; user-select: text; }
 .find-input::placeholder { color: var(--faint); }
 .past h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+
+/* ---- Help card ---- */
+.keys-pop { width: 330px; max-height: min(78vh, 680px); overflow-y: auto; }
+.help-q { width: 20px; height: 20px; border: 1.5px solid currentColor; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; line-height: 1; }
+.keys-pop .help-row { justify-content: flex-start; gap: 10px; color: var(--ink-soft); }
+.keys-pop .help-row > :first-child { flex: none; width: 118px; }
+.keys-pop .help-row span:last-child { display: inline; }
+.keys-pop .help-dot { min-width: 0 !important; width: 14px; display: inline-flex; justify-content: center; }
+.keys-pop code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--ink); }
+.help-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+
+/* ---- Saved (/stash and quick capture) ---- */
+.mini.saved { align-items: flex-start; }
+.saved-body { font-size: 14.5px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.saved-body.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mini.saved .link { justify-self: start; font-size: 13px; }
+.kind { font-weight: 600; color: var(--ink-soft); }
+.kind.idea { color: var(--go); }
+.empty-help { margin: 10px 4px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+.empty-help code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; color: var(--ink); }
+
+/* ---- Quick capture window ---- */
+html.capture, html.capture body { background: transparent !important; padding: 0 !important; overflow: hidden; }
+.capture-box { margin: 8px; height: 60px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--card); border: 1px solid var(--edge); border-radius: 16px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18); -webkit-app-region: drag; }
+.capture-box input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: 17px var(--body); -webkit-app-region: no-drag; }
+.capture-box input::placeholder { color: var(--faint); }
+.capture-from { font-size: 12.5px; color: var(--muted); white-space: nowrap; max-width: 34%; overflow: hidden; text-overflow: ellipsis; }
+.capture-mark { width: 9px; height: 9px; border-radius: 50%; background: var(--go); flex: none; }
+/* The help card opens from the tab bar, so the tab bar must sit above the list it covers. */
+.tabs { z-index: 30; }
