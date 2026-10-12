@@ -259,18 +259,17 @@ body:has(.view-open) { overflow: hidden; }
 .has-note { position: relative; }
 .has-note::after { content: ''; position: absolute; top: 1px; right: 1px; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
 
-/* Star: just a marker. Focus: one session leads, the rest dim (hover brings one back). */
+/* Star: just a marker. */
 .starred { display: inline-flex; color: var(--ink-soft); }
 .starred svg { width: 13px; height: 13px; }
 .mini-title .starred { margin-left: 6px; vertical-align: -1px; }
-.focus-mark { display: inline-flex; color: var(--go); }
-.focus-mark svg { width: 13px; height: 13px; }
-.focus-line { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13.5px; }
-.focus-line svg { width: 13px; height: 13px; color: var(--go); }
-.focus-line b { font-weight: 500; color: var(--ink); }
-.item.dim, .proj.dim > summary { opacity: 0.4; transition: opacity 0.15s; }
-.item.dim.dim-needs { opacity: 0.75; }
-.item.dim:hover, .item.dim:focus-within, .item.dim.cursor, .proj.dim > summary:hover { opacity: 1; }
+
+/* Focus (Open tab): the focused window leads with a quiet ring; the others dim until you hover or move to them. */
+.win.spot { box-shadow: 0 0 0 1.5px var(--go), 0 10px 30px rgba(0, 0, 0, 0.18); }
+.win.dim { opacity: 0.4; transition: opacity 0.15s; }
+.win.dim:hover, .win.dim.focused, .win.dim:focus-within { opacity: 1; }
+.win-bar .spot-x svg { width: 12px; height: 12px; display: block; }
+.win-bar .spot-x.on { color: var(--go); }
 
 /* Find */
 .top.find { justify-content: flex-start; align-items: center; gap: 10px; border-bottom: 1px solid var(--edge); padding-bottom: 8px; }
@@ -308,3 +307,17 @@ html.capture, html.capture body { background: transparent !important; padding: 0
 .capture-mark { width: 9px; height: 9px; border-radius: 50%; background: var(--go); flex: none; }
 /* The help card opens from the tab bar, so the tab bar must sit above the list it covers. */
 .tabs { z-index: 30; }
+
+/* ---- Peek: a session enlarged over the list ---- */
+.peek-backdrop { position: fixed; inset: 0; z-index: 100; background: color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 48px 28px 28px; }
+.peek { width: min(1100px, 100%); height: min(760px, 100%); background: #1c1c1e; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 24px 70px rgba(0, 0, 0, 0.35); }
+.peek-bar { height: 36px; flex: none; background: #2c2c2e; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px; color: #d1d1d6; font-size: 13px; }
+.peek-bar b { font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peek-bar .wp { color: #8e8e93; margin-right: 8px; }
+.peek-hint { color: #8e8e93; font-size: 12px; white-space: nowrap; }
+.peek-open { border: 1px solid #48484a; background: transparent; color: #f2f2f7; border-radius: 7px; padding: 3px 10px; font-size: 12.5px; }
+.peek-open:hover { background: #3a3a3c; }
+.peek-bar .x { border: 0; background: none; color: #8e8e93; font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 5px; }
+.peek-bar .x:hover { color: #f2f2f7; background: rgba(255, 255, 255, 0.08); }
+.peek .term { flex: 1; min-height: 0; }
+@media (max-width: 700px) { .peek-hint { display: none; } }

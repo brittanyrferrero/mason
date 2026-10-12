@@ -4,11 +4,13 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
-const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN'])
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyF'])
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
-export function Term({ name, focus, tick }: { name: string; focus: boolean; tick: number }) {
+// `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
+export function Term({ name, focus, tick, peek = false }: { name: string; focus: boolean; tick: number; peek?: boolean }) {
+  const client = peek ? `${name}~peek` : name
   const el = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
 
@@ -36,7 +38,7 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
       const lines = Math.trunc(wheel)
       if (lines) {
         wheel -= lines
-        window.mason.scroll(name, lines)
+        window.mason.scroll(client, lines)
       }
       return false
     })
@@ -46,13 +48,13 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
     termRef.current = t
 
     // Listen before attaching so the first screen redraw isn't missed.
-    const offData = window.mason.onTermData((n, d) => n === name && t.write(d))
-    const offExit = window.mason.onTermExit((n) => n === name && t.write('\r\n\x1b[2m[Detached]\x1b[0m\r\n'))
-    window.mason.attach(name, t.cols, t.rows).then((ok) => {
+    const offData = window.mason.onTermData((n, d) => n === client && t.write(d))
+    const offExit = window.mason.onTermExit((n) => n === client && t.write('\r\n\x1b[2m[Detached]\x1b[0m\r\n'))
+    window.mason.attach(client, t.cols, t.rows).then((ok) => {
       if (!ok) t.write('\x1b[2mThis session has ended.\x1b[0m\r\n')
     })
-    const input = t.onData((d) => window.mason.input(name, d))
-    const resize = t.onResize(({ cols, rows }) => window.mason.resize(name, cols, rows))
+    const input = t.onData((d) => window.mason.input(client, d))
+    const resize = t.onResize(({ cols, rows }) => window.mason.resize(client, cols, rows))
     const ro = new ResizeObserver(() => {
       try {
         fit.fit()
@@ -66,11 +68,11 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
       resize.dispose()
       offData()
       offExit()
-      window.mason.detach(name)
+      window.mason.detach(client)
       t.dispose()
       termRef.current = null
     }
-  }, [name])
+  }, [client])
 
   useEffect(() => {
     if (focus) termRef.current?.focus()
@@ -85,7 +87,7 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
     const paths = [...e.dataTransfer.files].map((f) => window.mason.pathFor(f)).filter((p) => p && !/[\x00-\x1f\x7f]/.test(p))
     if (!paths.length) return
     // Escaped the way Terminal does it (backslash before spaces and shell characters), which Claude recognizes.
-    window.mason.input(name, paths.map((p) => p.replace(/([ \t'"\\()[\]{}&;|<>*?!$`#~])/g, '\\$1')).join(' ') + ' ')
+    window.mason.input(client, paths.map((p) => p.replace(/([ \t'"\\()[\]{}&;|<>*?!$`#~])/g, '\\$1')).join(' ') + ' ')
     termRef.current?.focus()
   }
   return (

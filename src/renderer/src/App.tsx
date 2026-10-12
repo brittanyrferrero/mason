@@ -71,6 +71,12 @@ const StarIcon = ({ filled = false }: { filled?: boolean }) => (
     <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
   </svg>
 )
+const PeekIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
+    <circle cx="12" cy="12" r="2.8" />
+  </svg>
+)
 const FocusIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="9" />
@@ -101,7 +107,8 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Rename', ['R']],
       ['Pin', ['P']],
       ['Star', ['*']],
-      ['Focus on this one', ['F']],
+      ['Peek (answer it right here)', ['Space']],
+      ['Close Peek', ['⌘', '⇧', 'W']],
       ['Find', ['/']],
       ['Note on a session', ['N']],
       ['Shush', ['S']],
@@ -115,6 +122,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Previous window', ['⌘', '[']],
       ['Move window later', ['⌘', '⇧', ']']],
       ['Move window earlier', ['⌘', '⇧', '[']],
+      ['Focus this window', ['⌘', '⇧', 'F']],
       ['One at a time', ['⌘', '↵']],
       ['Change layout', ['⌘', 'L']],
       ['Change order', ['⌘', 'O']],
@@ -170,6 +178,8 @@ export function App() {
   const [ending, setEnding] = useState<string | null>(null) // Open-tab window asking "End this session?"
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
+  // Peek: a session enlarged over the list, live, so you can answer it without leaving Projects.
+  const [peeking, setPeeking] = useState<{ host: string; id: string } | null>(null)
   const [foot, setFoot] = useState<'paused' | 'saved' | 'done' | 'scratch' | null>(null)
   // Notes you've tucked away ('s:<id>' / 'p:<id>'); the pen brings them back. Remembered on this Mac.
   const [tucked, setTucked] = useState<Set<string>>(() => {
@@ -255,13 +265,6 @@ export function App() {
   }, [q, state])
   const closeFind = () => (setFinding(false), setQuery(''))
 
-  // Focus: one session you're working on. It leads the list and everything else dims. Remembered on this Mac.
-  const [focusOn, setFocusOn] = useState<string | null>(() => stored('focus', '') || null)
-  useEffect(() => store('focus', focusOn ?? ''), [focusOn])
-  const focusRow = allSessions.find(({ s }) => s.id === focusOn)?.s ?? null
-  useEffect(() => {
-    if (state && focusOn && !focusRow) setFocusOn(null) // it ended or was paused
-  }, [state, focusOn, focusRow])
   const projects = useMemo(() => {
     let list = state?.projects ?? []
     if (q) {
@@ -272,13 +275,25 @@ export function App() {
         (!starredOnly || s.starred) && terms.every((w) => [s.title, s.now, p.name, s.myNote ?? '', p.myNote ?? ''].join(' ').toLowerCase().includes(w))
       list = list.map((p) => ({ ...p, sessions: p.sessions.filter((s) => hit(s, p)) })).filter((p) => p.sessions.length)
     }
-    if (!focusOn) return list
-    const lead = (p: (typeof list)[number]) => p.sessions.some((s) => s.id === focusOn)
-    return [...list.filter(lead).map((p) => ({ ...p, sessions: [...p.sessions].sort((a, b) => Number(b.id === focusOn) - Number(a.id === focusOn)) })), ...list.filter((p) => !lead(p))]
-  }, [state, focusOn, q])
+    return list
+  }, [state, q])
 
-  const isOpen = (id: number) => !!q || (shushed ? opened.has(id) : !closed.has(id)) || projects.some((p) => p.id === id && p.sessions.some((s) => s.id === focusOn))
+  const isOpen = (id: number) => !!q || (shushed ? opened.has(id) : !closed.has(id))
   const visibleRows = useMemo(() => projects.flatMap((p) => (isOpen(p.id) ? p.sessions : [])), [projects, shushed, closed, opened, q])
+
+  // The menu bar can ask to peek at a waiting session (or, for one in Terminal, bring it forward).
+  useEffect(() => {
+    const offPeek = window.mason.onPeek((target, id) => {
+      setView('projects')
+      if (target) setPeeking(target)
+      else window.mason.open(id)
+    })
+    const offNotice = window.mason.onNotice((text) => flashNote({ text, tone: 'ok' }))
+    return () => {
+      offPeek()
+      offNotice()
+    }
+  }, [])
 
   const flashNote = (n: Note) => {
     setNote(n)
@@ -335,7 +350,10 @@ export function App() {
   }
 
   // Windows in the Open tab. "Project" keeps the same order as the list; the sorts are stable, so ties stay in it.
-  const windows = useMemo(() => {
+  // Focus (Open tab): one window you're working in leads, and the others dim. Remembered on this Mac.
+  const [spotlight, setSpotlight] = useState<string | null>(() => stored('spotlight', '') || null)
+  useEffect(() => store('spotlight', spotlight ?? ''), [spotlight])
+  const sortedWindows = useMemo(() => {
     // One window per host, whatever the list says: a repeated React key would leave stray copies on screen.
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
     const pending = openHosts
@@ -359,6 +377,12 @@ export function App() {
     if (sort === 'custom') return list.sort((a, b) => rank(a.host) - rank(b.host))
     return list
   }, [allSessions, openHosts, sort, order])
+  const windows = useMemo(
+    () => (spotlight && sortedWindows.some((w) => w.host === spotlight) ? [...sortedWindows].sort((a, b) => Number(b.host === spotlight) - Number(a.host === spotlight)) : sortedWindows),
+    [sortedWindows, spotlight]
+  )
+  const spot = windows.length > 1 && windows.some((w) => w.host === spotlight) ? spotlight : null
+  const toggleSpotlight = (host: string) => setSpotlight((cur) => (cur === host ? null : host))
 
   useEffect(() => {
     if (view === 'open' && !windows.length) setView('projects')
@@ -434,7 +458,6 @@ export function App() {
   }
   const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
   const star = (s: SessionView) => hasPrefs(s) && window.mason.star(s.id, !s.starred)
-  const toggleFocus = (s: SessionView) => setFocusOn((f) => (f === s.id ? null : s.id))
   // The pen: brings back a tucked note, otherwise starts writing (or editing) one.
   const openNote = (key: string) => (tucked.has(key) ? tuck(key, false) : setNoting(key))
   const saveNote = (target: string, body: string | null) => {
@@ -444,6 +467,15 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (peeking) {
+        // Keys typed into the peeked terminal belong to Claude; only these close Peek.
+        const inTerm = (e.target as Element).closest?.('.xterm')
+        if ((e.metaKey && e.shiftKey && e.code === 'KeyW') || (e.key === 'Escape' && !inTerm)) {
+          e.preventDefault()
+          setPeeking(null)
+        }
+        return
+      }
       if (e.metaKey && (e.key === '1' || e.key === '2')) {
         e.preventDefault()
         if (e.key === '2' && !openHosts.length) return
@@ -470,6 +502,7 @@ export function App() {
           const sid = windows.find((w) => w.host === focusHost)?.sid
           return sid && openNote(`s:${sid}`)
         }
+        if (c === 'KeyF' && e.shiftKey && focusHost) return e.preventDefault(), toggleSpotlight(focusHost)
         if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
@@ -488,7 +521,7 @@ export function App() {
       if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
       if (k === 'p' && sel) return pin(sel)
       if (e.key === '*' && sel) return star(sel)
-      if (k === 'f' && sel) return toggleFocus(sel)
+      if (e.key === ' ' && sel?.host) return e.preventDefault(), setPeeking({ host: sel.host, id: sel.id })
       if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), openNote(`s:${sel.id}`)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
@@ -502,7 +535,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending, shown, only, openProjects])
+  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending, shown, only, openProjects, peeking])
 
   useEffect(() => {
     if (!keysOpen) return
@@ -525,6 +558,31 @@ export function App() {
 
   return (
     <div className={`app view-${view}`}>
+      {peeking && (() => {
+        const hit = allSessions.find(({ s }) => s.host === peeking.host)
+        if (!hit) return null
+        return (
+          <div className="peek-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPeeking(null)}>
+            <div className="peek" role="dialog" aria-label={`Peek at ${hit.s.title}`}>
+              <div className="peek-bar">
+                <span className={`dot ${hit.s.status}`} />
+                <b>
+                  <span className="wp">{hit.project}</span>
+                  {hit.s.title}
+                </b>
+                <span className="peek-hint">⌘⇧W or click outside to close</span>
+                <button type="button" className="peek-open" onClick={() => (setPeeking(null), open(hit.s))}>
+                  Open
+                </button>
+                <button type="button" className="x" aria-label="Close Peek" onClick={() => setPeeking(null)}>
+                  ×
+                </button>
+              </div>
+              <Term name={peeking.host} focus tick={0} peek />
+            </div>
+          </div>
+        )
+      })()}
       <div className="dragbar" aria-hidden="true" />
       <nav className="tabs" role="tablist">
         <button className="tab" role="tab" type="button" aria-selected={view === 'projects'} onClick={() => setView('projects')}>
@@ -556,6 +614,14 @@ export function App() {
             ))}
             <p className="help-note">They’re saved without Claude taking a turn. Find them under Saved, at the bottom of Projects.</p>
             <h4>From any app</h4>
+            <div>
+              <span>Bring Mason forward</span>
+              <span>
+                <kbd>⌃</kbd>
+                <kbd>⌥</kbd>
+                <kbd>M</kbd>
+              </span>
+            </div>
             <div>
               <span>Quick capture a thought</span>
               <span>
@@ -612,7 +678,7 @@ export function App() {
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
                 onFocusCapture={() => setFocusHost(w.host)}
                 onDragOver={(e) => {
                   if (!dragging || dragging === w.host) return
@@ -660,6 +726,17 @@ export function App() {
                     </>
                   ) : (
                     <>
+                      {n > 1 && (
+                        <button
+                          className={`x spot-x ${spot === w.host ? 'on' : ''}`}
+                          type="button"
+                          aria-label={spot === w.host ? 'Stop focusing on this window' : 'Focus on this window'}
+                          title={spot === w.host ? 'Stop focusing (⌘⇧F)' : 'Focus on this window: it goes first and the others dim (⌘⇧F)'}
+                          onClick={() => toggleSpotlight(w.host)}
+                        >
+                          <FocusIcon />
+                        </button>
+                      )}
                       {w.sid && (
                         <button
                           className={`x note-x ${w.myNote && tucked.has(`s:${w.sid}`) ? 'has-note' : ''}`}
@@ -733,21 +810,7 @@ export function App() {
           </div>
         ) : (
         <div className="top">
-          {note ? (
-            <p className={`note ${note.tone}`}>{note.text}</p>
-          ) : (
-            focusRow && (
-              <p className="note focus-line">
-                <FocusIcon />
-                <span>
-                  Focusing on <b>{focusRow.title}</b>
-                </span>
-                <button className="link" type="button" onClick={() => setFocusOn(null)} title="Stop focusing (F)">
-                  Stop
-                </button>
-              </p>
-            )
-          )}
+          {note && <p className={`note ${note.tone}`}>{note.text}</p>}
           <div className="tools">
             {hosted.length > 0 && (
               <button className="pill" type="button" onClick={() => openAll(hosted.map(({ s }) => s))}>
@@ -779,7 +842,7 @@ export function App() {
               const moving = p.sessions.some((s) => s.status === 'working')
               const inMason = p.sessions.filter((s) => s.host)
               return (
-                <details key={p.id} className={`proj ${focusOn && !p.sessions.some((s) => s.id === focusOn) ? 'dim' : ''}`} open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
+                <details key={p.id} className="proj" open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
                   <summary>
                     <Chevron />
                     <span className="proj-name serif">{p.name}</span>
@@ -833,8 +896,7 @@ export function App() {
                         onRenamed={(name) => (name === null ? setRenaming(null) : rename(s, name))}
                         onPin={hasPrefs(s) ? () => pin(s) : undefined}
                         onStar={hasPrefs(s) ? () => star(s) : undefined}
-                        focus={!focusOn ? null : focusOn === s.id ? 'on' : 'dim'}
-                        onFocus={() => toggleFocus(s)}
+                        onPeek={s.host ? () => setPeeking({ host: s.host!, id: s.id }) : undefined}
                         noting={noting === `s:${s.id}`}
                         tucked={tucked.has(`s:${s.id}`)}
                         onTuck={(on) => tuck(`s:${s.id}`, on)}
@@ -1048,8 +1110,7 @@ type RowProps = {
   onRenamed: (name: string | null) => void // null: cancelled
   onPin?: () => void
   onStar?: () => void
-  focus: 'on' | 'dim' | null
-  onFocus: () => void
+  onPeek?: () => void
   noting: boolean
   tucked: boolean
   onTuck: (on: boolean) => void
@@ -1063,7 +1124,7 @@ type RowProps = {
   onCancelEnd: () => void
 }
 
-function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, onStar, focus, onFocus, noting, tucked, onTuck, onEditNote, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
+function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, onStar, onPeek, noting, tucked, onTuck, onEditNote, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
   const settled = useRef(false) // Enter or Esc already decided; the blur that follows shouldn't save again
   useEffect(() => {
@@ -1080,7 +1141,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
       ? 'Stop Claude in its Terminal window. The window stays open, and the conversation goes to paused so you can resume it.'
       : 'Stop this session. The conversation goes to paused so you can resume it.'
   return (
-    <div className={`item ${cursor ? 'cursor' : ''} ${focus === 'on' ? 'focused-row' : focus === 'dim' ? `dim ${s.status === 'needs' ? 'dim-needs' : ''}` : ''}`}>
+    <div className={`item ${cursor ? 'cursor' : ''}`}>
       <div className="row">
         {renaming ? (
           <span className="main-btn">
@@ -1118,11 +1179,6 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
                   <PinIcon />
                 </span>
               )}
-              {focus === 'on' && (
-                <span className="focus-mark" title="You're focusing on this one">
-                  <FocusIcon />
-                </span>
-              )}
               {s.status === 'needs' && <span className="tag">waiting</span>}
               {inTerminal && <span className="where">in Terminal</span>}
             </span>
@@ -1147,6 +1203,11 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
           </span>
         ) : (
           <span className="acts">
+            {onPeek && (
+              <button className="icon" type="button" onClick={onPeek} aria-label="Peek" title="Peek: see it big and answer it here (Space)">
+                <PeekIcon />
+              </button>
+            )}
             {onRename && (
               <button className="icon" type="button" onClick={onRename} aria-label="Rename" title="Rename (R)">
                 <RenameIcon />
@@ -1162,9 +1223,6 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
                 <StarIcon filled={s.starred} />
               </button>
             )}
-            <button className="icon" type="button" onClick={onFocus} aria-label={focus === 'on' ? 'Stop focusing' : 'Focus on this one'} title={focus === 'on' ? 'Stop focusing (F)' : 'Focus on this one; everything else dims (F)'}>
-              <FocusIcon />
-            </button>
             {onPin && (
               <button className="icon" type="button" onClick={onPin} aria-label={s.pinned ? 'Unpin' : 'Pin'} title={s.pinned ? 'Unpin (P)' : 'Pin to the top of its project (P)'}>
                 <PinIcon />

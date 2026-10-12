@@ -29,6 +29,22 @@ const api = {
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
   removeSaved: (id: number): Promise<boolean> => ipcRenderer.invoke('saved:remove', id),
 
+  // Sent by the menu bar: peek at a waiting session, or show a one-off message.
+  onPeek: (cb: (target: { host: string; id: string } | null, id: string) => void) => {
+    const listener = (_e: IpcRendererEvent, target: { host: string; id: string } | null, id: string) => cb(target, id)
+    ipcRenderer.on('mason:peek', listener)
+    return () => {
+      ipcRenderer.removeListener('mason:peek', listener)
+    }
+  },
+  onNotice: (cb: (text: string) => void) => {
+    const listener = (_e: IpcRendererEvent, text: string) => cb(text)
+    ipcRenderer.on('mason:notice', listener)
+    return () => {
+      ipcRenderer.removeListener('mason:notice', listener)
+    }
+  },
+
   // Quick capture (its own little window).
   captureSave: (text: string): Promise<boolean> => ipcRenderer.invoke('capture:save', text),
   captureClose: () => ipcRenderer.send('capture:close'),

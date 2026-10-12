@@ -1,13 +1,15 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, nativeTheme, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { DATA_DIR, openDb, type DB } from './db'
 import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript } from './events'
 import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
+import { TRAY_1X, TRAY_2X } from './trayIcon'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
 import * as term from './pty'
+import { CLIENT_RE, sessionOf } from './pty'
 import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writePauseScript } from './handoff'
 import { buildState, searchPast } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
@@ -46,7 +48,105 @@ function pushState(): void {
   // The Dock badge counts sessions waiting on you, so you can see it from anywhere.
   const waiting = s.projects.reduce((n, p) => n + p.sessions.filter((x) => x.status === 'needs').length, 0)
   app.dock?.setBadge(waiting ? String(waiting) : '')
+  updateTray(s)
+  rememberHosted(s)
   send('state:changed', s)
+}
+
+// ---- Bring Mason forward from anywhere (⌃⌥M); press again to put it away ----
+export const SHOW_SHORTCUT = 'Control+Alt+M'
+function showMason(): void {
+  if (!win) createWindow()
+  else {
+    if (win.isMinimized()) win.restore()
+    win.show()
+  }
+  app.focus({ steal: true })
+  win?.focus()
+}
+function toggleMason(): void {
+  if (win && win.isFocused() && win.isVisible()) app.hide()
+  else showMason()
+}
+
+// ---- Menu bar: the waiting count, and a way in from anywhere ----
+let tray: Tray | null = null
+let trayKey = ''
+function updateTray(s: ReturnType<typeof state>): void {
+  if (!tray) return
+  const waitingRows = s.projects.flatMap((p) => p.sessions.filter((x) => x.status === 'needs').map((x) => ({ ...x, project: p.name })))
+  tray.setTitle(waitingRows.length ? ` ${waitingRows.length}` : '')
+  tray.setToolTip(waitingRows.length ? `Mason: ${waitingRows.length} waiting on you` : 'Mason')
+  const key = JSON.stringify(waitingRows.map((r) => [r.id, r.title, r.host]))
+  if (key === trayKey) return // the menu only changes when the waiting list does
+  trayKey = key
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Mason', accelerator: SHOW_SHORTCUT, click: showMason },
+      { label: 'Quick capture…', accelerator: CAPTURE_SHORTCUT, click: openCapture },
+      { type: 'separator' },
+      ...(waitingRows.length
+        ? [
+            { label: 'Waiting on you', enabled: false },
+            ...waitingRows.slice(0, 12).map((r) => ({
+              label: `${r.title}  ·  ${r.project}`,
+              // Sessions inside Mason open in Peek, so you can answer straight away.
+              click: () => {
+                showMason()
+                send('mason:peek', r.host ? { host: r.host, id: r.id } : null, r.id)
+              }
+            })),
+            { type: 'separator' as const }
+          ]
+        : [{ label: 'Nothing is waiting on you', enabled: false }, { type: 'separator' as const }]),
+      { label: 'Quit Mason', click: () => app.quit() }
+    ])
+  )
+}
+function createTray(): void {
+  const img = nativeImage.createFromDataURL(TRAY_1X)
+  img.addRepresentation({ scaleFactor: 2, dataURL: TRAY_2X })
+  img.setTemplateImage(true)
+  tray = new Tray(img)
+  trayKey = ''
+}
+
+// ---- After a Mac restart, tmux is gone; reopen the sessions that were running in Mason ----
+const REOPEN_KEY = 'reopen'
+let lastHosted = ''
+function rememberHosted(s: ReturnType<typeof state>): void {
+  const ids = s.projects.flatMap((p) => p.sessions.filter((x) => x.host && !x.id.startsWith('tmux:')).map((x) => x.id)).sort()
+  const key = JSON.stringify(ids)
+  if (key === lastHosted) return
+  lastHosted = key
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
+    REOPEN_KEY,
+    JSON.stringify({ at: Date.now(), ids })
+  )
+}
+function reopenAfterRestart(): number {
+  if (listHosted().length) return 0 // tmux survived (Mason just quit or crashed): everything is still there
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(REOPEN_KEY) as { value: string } | undefined
+  if (!row) return 0
+  let saved: { at: number; ids: string[] }
+  try {
+    saved = JSON.parse(row.value)
+  } catch {
+    return 0
+  }
+  if (!Array.isArray(saved.ids) || Date.now() - saved.at > 7 * 24 * 60 * 60_000) return 0
+  const live = readLive()
+  let n = 0
+  for (const id of saved.ids) {
+    if (!SESSION_ID_RE.test(id) || live.has(id)) continue
+    const r = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
+    if (!r?.cwd || !existsSync(r.cwd)) continue
+    try {
+      startSession(r.cwd, id)
+      n++
+    } catch {}
+  }
+  return n
 }
 
 const waitForExit = async (pid: number, ms: number) => {
@@ -415,30 +515,30 @@ app.whenReady().then(() => {
   })
 
   // Terminals in the Open tab. Each window is one attached tmux client; closing it only detaches.
-  ipcMain.handle('term:attach', (e, name: unknown, cols: unknown, rows: unknown) => {
-    if (!trusted(e) || typeof name !== 'string' || !NAME_RE.test(name)) return false
-    if (!listHosted().some((h) => h.name === name)) return false
+  ipcMain.handle('term:attach', (e, client: unknown, cols: unknown, rows: unknown) => {
+    if (!trusted(e) || typeof client !== 'string' || !CLIENT_RE.test(client)) return false
+    if (!listHosted().some((h) => h.name === sessionOf(client))) return false
     return term.attach(
-      name,
+      client,
       Number(cols),
       Number(rows),
-      (data) => send('term:data', name, data),
+      (data) => send('term:data', client, data),
       () => {
-        send('term:exit', name)
+        send('term:exit', client)
         refreshSoon(false)
       }
     )
   })
-  ipcMain.on('term:input', (e, name: unknown, data: unknown) => {
-    if (!trusted(e) || typeof name !== 'string' || typeof data !== 'string') return
-    unscroll(name)
-    term.write(name, data)
+  ipcMain.on('term:input', (e, client: unknown, data: unknown) => {
+    if (!trusted(e) || typeof client !== 'string' || typeof data !== 'string' || !CLIENT_RE.test(client)) return
+    unscroll(sessionOf(client))
+    term.write(client, data)
   })
-  ipcMain.on('term:scroll', (e, name: unknown, lines: unknown) => {
-    if (trusted(e) && typeof name === 'string') scroll(name, Number(lines))
+  ipcMain.on('term:scroll', (e, client: unknown, lines: unknown) => {
+    if (trusted(e) && typeof client === 'string' && CLIENT_RE.test(client)) scroll(sessionOf(client), Number(lines))
   })
-  ipcMain.on('term:resize', (e, name: unknown, cols: unknown, rows: unknown) => {
-    if (trusted(e) && typeof name === 'string') term.resize(name, Number(cols), Number(rows))
+  ipcMain.on('term:resize', (e, client: unknown, cols: unknown, rows: unknown) => {
+    if (trusted(e) && typeof client === 'string') term.resize(client, Number(cols), Number(rows))
   })
   ipcMain.on('term:detach', (e, name: unknown) => {
     if (trusted(e) && typeof name === 'string') term.detach(name)
@@ -468,8 +568,15 @@ app.whenReady().then(() => {
   setTimeout(summarize, 15_000)
   setInterval(summarize, 60_000)
 
+  const reopened = reopenAfterRestart()
   createWindow()
+  createTray()
   pushState()
+  if (reopened)
+    win?.webContents.once('did-finish-load', () =>
+      setTimeout(() => send('mason:notice', `Reopened ${reopened} session${reopened > 1 ? 's' : ''} from before your Mac restarted.`), 800)
+    )
+  if (!globalShortcut.register(SHOW_SHORTCUT, toggleMason)) console.warn(`Couldn't claim ${SHOW_SHORTCUT}; another app has it.`)
   // The quick-capture panel counts as a window, so check for the main one specifically.
   app.on('activate', () => !win && createWindow())
 })
