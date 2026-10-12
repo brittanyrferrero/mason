@@ -22,6 +22,7 @@ const api = {
   end: (id: string): Promise<boolean> => ipcRenderer.invoke('session:end', id),
   rename: (id: string, name: string): Promise<boolean> => ipcRenderer.invoke('session:rename', id, name),
   pin: (id: string, pinned: boolean): Promise<boolean> => ipcRenderer.invoke('session:pin', id, pinned),
+  star: (id: string, starred: boolean): Promise<boolean> => ipcRenderer.invoke('session:star', id, starred),
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
 

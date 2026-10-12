@@ -98,5 +98,7 @@ export function openDb(): DB {
   // Columns added after the first release.
   const cols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
   if (!cols.has('entrypoint')) db.exec('ALTER TABLE sessions ADD COLUMN entrypoint TEXT')
+  const prefCols = new Set((db.prepare('PRAGMA table_info(session_prefs)').all() as { name: string }[]).map((c) => c.name))
+  if (!prefCols.has('starred')) db.exec('ALTER TABLE session_prefs ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
   return db
 }

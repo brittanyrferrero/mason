@@ -27,21 +27,22 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 
 ## Now (in this order)
 
-- [x] **Rename and pin.** Give a session your own name (R, or the pencil on hover); pinned sessions (P) lead their project.
+- [x] **Rename and pin.** Give a session your own name (R, or the T on hover); pinned sessions (P) lead their project.
 - [x] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
       a two-line "where was I?" recap: what you were doing and the next step. Can be turned off.
 - [x] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
       session can pick up exactly where it left off. **/pause** inside Claude does this and stops the session;
       the note shows on the paused list and you can edit it.
 - [x] **Persistent notes.** A note on any session or project that survives ending, pausing, and restarts.
-      Shows as one muted line on the row; click to edit. Plus one free-floating scratchpad.
+      Start one with the pen; long notes fold with "more", and ▴ tucks one away. Plus one free-floating scratchpad.
 
 ## Next
 
 - [ ] **Quick capture.** A global hotkey opens a one-line box from any app; type, Enter, gone.
       Lands in the inbox ("ideas saved") tagged with whatever session you were in.
 - [ ] **/stash** inside Claude: park a stray thought or side quest in Mason without derailing the session.
-- [ ] **Focus on one.** Mark a session as "now"; Mason dims the rest and keeps that one a keystroke away.
+- [x] **Focus on one.** F (or the target on hover) puts a session first and dims the rest; "Focusing on …  Stop" up top.
+- [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
 - [ ] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
 - [ ] **Type to filter** the list by title, project, or note.
 

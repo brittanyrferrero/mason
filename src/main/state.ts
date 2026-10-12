@@ -16,6 +16,7 @@ export type SessionView = {
   lastActivity: number
   host: string | null // tmux session name when it lives inside Mason; null when it's in a Terminal window
   pinned: boolean
+  starred: boolean
   next?: string // from the summary: the very next step
   myNote?: string
 }
@@ -28,6 +29,7 @@ export type PausedView = {
   next?: string
   myNote?: string
   handoff?: { stopped: string; next: string; brief: string } // from /pause
+  starred: boolean
   lastActivity: number
 }
 
@@ -93,9 +95,10 @@ export function buildState(
     return h && !claimed.has(h) ? h : null
   }
   const prefs = new Map(
-    (db.prepare('SELECT session_id, name, pinned FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number }[]).map((p) => [p.session_id, p])
+    (db.prepare('SELECT session_id, name, pinned, starred FROM session_prefs').all() as { session_id: string; name: string | null; pinned: number; starred: number }[]).map((p) => [p.session_id, p])
   )
   const pinned = (id: string) => !!prefs.get(id)?.pinned
+  const starred = (id: string) => !!prefs.get(id)?.starred
   // Your own name wins; then Claude's summary (it keeps up as the work drifts); then Claude Code's first-prompt title.
   const sums = readSummaries(db)
   const myNotes = new Map((db.prepare('SELECT target, body FROM my_notes').all() as { target: string; body: string }[]).map((n) => [n.target, n.body]))
@@ -124,6 +127,7 @@ export function buildState(
         next: handoffs.get(r.id)?.next || sums.get(r.id)?.next || undefined,
         handoff: handoffs.get(r.id),
         myNote: myNote(r.id),
+        starred: starred(r.id),
         lastActivity: r.last_activity ?? 0
       })
       continue
@@ -144,7 +148,8 @@ export function buildState(
         branch: null,
         lastActivity: r.last_activity ?? 0,
         host: h,
-        pinned: false
+        pinned: false,
+        starred: false
       })
     }
     add(r.project_id, r.project, {
@@ -161,7 +166,8 @@ export function buildState(
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
       host,
-      pinned: pinned(r.id)
+      pinned: pinned(r.id),
+      starred: starred(r.id)
     })
   }
 
@@ -172,7 +178,7 @@ export function buildState(
     if (host) claimed.add(host)
     const p = projectFor(l.cwd)
     const need = needs.get(id)
-    add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host, pinned: pinned(id) })
+    add(p.id, p.name, { id, title: 'New session', now: need?.message ?? 'Say hi to get started', status: need ? 'needs' : l.status, branch: null, lastActivity: Date.now(), host, pinned: pinned(id), starred: starred(id) })
   }
   // Mason shells where Claude isn't running: still starting, stuck on its first question, or exited.
   for (const h of hosted) {
@@ -188,7 +194,8 @@ export function buildState(
       branch: null,
       lastActivity: h.created,
       host: h.name,
-      pinned: false
+      pinned: false,
+        starred: false
     })
   }
 

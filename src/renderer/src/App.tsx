@@ -66,6 +66,17 @@ const NoteIcon = () => (
     <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
   </svg>
 )
+const StarIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
+  </svg>
+)
+const FocusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="3.5" />
+  </svg>
+)
 const KeyboardIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
@@ -89,6 +100,8 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Open all', ['A']],
       ['Rename', ['R']],
       ['Pin', ['P']],
+      ['Star', ['*']],
+      ['Focus on this one', ['F']],
       ['Note on a session', ['N']],
       ['Shush', ['S']],
       ['Show this', ['?']]
@@ -214,8 +227,22 @@ export function App() {
     setOpenHosts((hs) => hs.filter((h) => alive.has(h) || !seenHosts.current.has(h)))
   }, [state])
 
-  const isOpen = (id: number) => (shushed ? opened.has(id) : !closed.has(id))
-  const visibleRows = useMemo(() => (state?.projects ?? []).flatMap((p) => (isOpen(p.id) ? p.sessions : [])), [state, shushed, closed, opened])
+  // Focus: one session you're working on. It leads the list and everything else dims. Remembered on this Mac.
+  const [focusOn, setFocusOn] = useState<string | null>(() => stored('focus', '') || null)
+  useEffect(() => store('focus', focusOn ?? ''), [focusOn])
+  const focusRow = allSessions.find(({ s }) => s.id === focusOn)?.s ?? null
+  useEffect(() => {
+    if (state && focusOn && !focusRow) setFocusOn(null) // it ended or was paused
+  }, [state, focusOn, focusRow])
+  const projects = useMemo(() => {
+    const list = state?.projects ?? []
+    if (!focusOn) return list
+    const lead = (p: (typeof list)[number]) => p.sessions.some((s) => s.id === focusOn)
+    return [...list.filter(lead).map((p) => ({ ...p, sessions: [...p.sessions].sort((a, b) => Number(b.id === focusOn) - Number(a.id === focusOn)) })), ...list.filter((p) => !lead(p))]
+  }, [state, focusOn])
+
+  const isOpen = (id: number) => (shushed ? opened.has(id) : !closed.has(id)) || projects.some((p) => p.id === id && p.sessions.some((s) => s.id === focusOn))
+  const visibleRows = useMemo(() => projects.flatMap((p) => (isOpen(p.id) ? p.sessions : [])), [projects, shushed, closed, opened])
 
   const flashNote = (n: Note) => {
     setNote(n)
@@ -370,6 +397,8 @@ export function App() {
     if (name.trim() !== s.title) window.mason.rename(s.id, name)
   }
   const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
+  const star = (s: SessionView) => hasPrefs(s) && window.mason.star(s.id, !s.starred)
+  const toggleFocus = (s: SessionView) => setFocusOn((f) => (f === s.id ? null : s.id))
   // The pen: brings back a tucked note, otherwise starts writing (or editing) one.
   const openNote = (key: string) => (tucked.has(key) ? tuck(key, false) : setNoting(key))
   const saveNote = (target: string, body: string | null) => {
@@ -418,6 +447,8 @@ export function App() {
       const sel = visibleRows.find((s) => s.id === cursor)
       if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
       if (k === 'p' && sel) return pin(sel)
+      if (e.key === '*' && sel) return star(sel)
+      if (k === 'f' && sel) return toggleFocus(sel)
       if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), openNote(`s:${sel.id}`)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
@@ -606,7 +637,21 @@ export function App() {
 
       <main className="col" hidden={view !== 'projects'}>
         <div className="top">
-          {note && <p className={`note ${note.tone}`}>{note.text}</p>}
+          {note ? (
+            <p className={`note ${note.tone}`}>{note.text}</p>
+          ) : (
+            focusRow && (
+              <p className="note focus-line">
+                <FocusIcon />
+                <span>
+                  Focusing on <b>{focusRow.title}</b>
+                </span>
+                <button className="link" type="button" onClick={() => setFocusOn(null)} title="Stop focusing (F)">
+                  Stop
+                </button>
+              </p>
+            )
+          )}
           <div className="tools">
             {hosted.length > 0 && (
               <button className="pill" type="button" onClick={() => openAll(hosted.map(({ s }) => s))}>
@@ -626,12 +671,12 @@ export function App() {
           <p className="empty">No Claude sessions are running right now. Resume one from paused below.</p>
         ) : (
           <div>
-            {state.projects.map((p) => {
+            {projects.map((p) => {
               const waiting = p.sessions.filter((s) => s.status === 'needs').length
               const moving = p.sessions.some((s) => s.status === 'working')
               const inMason = p.sessions.filter((s) => s.host)
               return (
-                <details key={p.id} className="proj" open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
+                <details key={p.id} className={`proj ${focusOn && !p.sessions.some((s) => s.id === focusOn) ? 'dim' : ''}`} open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
                   <summary>
                     <Chevron />
                     <span className="proj-name serif">{p.name}</span>
@@ -684,6 +729,9 @@ export function App() {
                         onRename={hasPrefs(s) ? () => setRenaming(s.id) : undefined}
                         onRenamed={(name) => (name === null ? setRenaming(null) : rename(s, name))}
                         onPin={hasPrefs(s) ? () => pin(s) : undefined}
+                        onStar={hasPrefs(s) ? () => star(s) : undefined}
+                        focus={!focusOn ? null : focusOn === s.id ? 'on' : 'dim'}
+                        onFocus={() => toggleFocus(s)}
                         noting={noting === `s:${s.id}`}
                         tucked={tucked.has(`s:${s.id}`)}
                         onTuck={(on) => tuck(`s:${s.id}`, on)}
@@ -730,6 +778,11 @@ export function App() {
                     <div className="mini-text">
                       <span className="mini-title">
                         {p.title}
+                        {p.starred && (
+                          <span className="starred" title="Starred">
+                            <StarIcon filled />
+                          </span>
+                        )}
                         <small>
                           {p.project} · {ago(p.lastActivity)}
                         </small>
@@ -837,6 +890,9 @@ type RowProps = {
   onRename?: () => void
   onRenamed: (name: string | null) => void // null: cancelled
   onPin?: () => void
+  onStar?: () => void
+  focus: 'on' | 'dim' | null
+  onFocus: () => void
   noting: boolean
   tucked: boolean
   onTuck: (on: boolean) => void
@@ -850,7 +906,7 @@ type RowProps = {
   onCancelEnd: () => void
 }
 
-function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, noting, tucked, onTuck, onEditNote, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
+function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenamed, onPin, onStar, focus, onFocus, noting, tucked, onTuck, onEditNote, onNote, onNoted, onOpen, onMove, onEnd, onConfirmEnd, onCancelEnd }: RowProps) {
   const inTerminal = !s.host
   const settled = useRef(false) // Enter or Esc already decided; the blur that follows shouldn't save again
   useEffect(() => {
@@ -867,7 +923,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
       ? 'Stop Claude in its Terminal window. The window stays open, and the conversation goes to paused so you can resume it.'
       : 'Stop this session. The conversation goes to paused so you can resume it.'
   return (
-    <div className={`item ${cursor ? 'cursor' : ''}`}>
+    <div className={`item ${cursor ? 'cursor' : ''} ${focus === 'on' ? 'focused-row' : focus === 'dim' ? `dim ${s.status === 'needs' ? 'dim-needs' : ''}` : ''}`}>
       <div className="row">
         {renaming ? (
           <span className="main-btn">
@@ -895,9 +951,19 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
             <span className="title">
               <span className={`dot ${s.status}`} />
               <span className="title-text">{s.title}</span>
+              {s.starred && (
+                <span className="starred" title="Starred">
+                  <StarIcon filled />
+                </span>
+              )}
               {s.pinned && (
                 <span className="pinned" title="Pinned">
                   <PinIcon />
+                </span>
+              )}
+              {focus === 'on' && (
+                <span className="focus-mark" title="You're focusing on this one">
+                  <FocusIcon />
                 </span>
               )}
               {s.status === 'needs' && <span className="tag">waiting</span>}
@@ -934,6 +1000,14 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
                 <NoteIcon />
               </button>
             )}
+            {onStar && (
+              <button className="icon" type="button" onClick={onStar} aria-label={s.starred ? 'Unstar' : 'Star'} title={s.starred ? 'Unstar (*)' : 'Star (*)'}>
+                <StarIcon filled={s.starred} />
+              </button>
+            )}
+            <button className="icon" type="button" onClick={onFocus} aria-label={focus === 'on' ? 'Stop focusing' : 'Focus on this one'} title={focus === 'on' ? 'Stop focusing (F)' : 'Focus on this one; everything else dims (F)'}>
+              <FocusIcon />
+            </button>
             {onPin && (
               <button className="icon" type="button" onClick={onPin} aria-label={s.pinned ? 'Unpin' : 'Pin'} title={s.pinned ? 'Unpin (P)' : 'Pin to the top of its project (P)'}>
                 <PinIcon />

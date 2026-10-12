@@ -247,6 +247,12 @@ app.whenReady().then(() => {
     pushState()
     return true
   })
+  ipcMain.handle('session:star', (e, id: unknown, starred: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof starred !== 'boolean') return false
+    db.prepare('INSERT INTO session_prefs (session_id, starred) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET starred = excluded.starred').run(id, starred ? 1 : 0)
+    pushState()
+    return true
+  })
   ipcMain.handle('session:pin', (e, id: unknown, pinned: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof pinned !== 'boolean') return false
     db.prepare('INSERT INTO session_prefs (session_id, pinned) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET pinned = excluded.pinned').run(id, pinned ? 1 : 0)

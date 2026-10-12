@@ -258,3 +258,16 @@ body:has(.view-open) { overflow: hidden; }
 .pen-link svg { width: 12px; height: 12px; }
 .has-note { position: relative; }
 .has-note::after { content: ''; position: absolute; top: 1px; right: 1px; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+
+/* Star: just a marker. Focus: one session leads, the rest dim (hover brings one back). */
+.starred { display: inline-flex; color: var(--ink-soft); }
+.starred svg { width: 13px; height: 13px; }
+.mini-title .starred { margin-left: 6px; vertical-align: -1px; }
+.focus-mark { display: inline-flex; color: var(--go); }
+.focus-mark svg { width: 13px; height: 13px; }
+.focus-line { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13.5px; }
+.focus-line svg { width: 13px; height: 13px; color: var(--go); }
+.focus-line b { font-weight: 500; color: var(--ink); }
+.item.dim, .proj.dim > summary { opacity: 0.4; transition: opacity 0.15s; }
+.item.dim.dim-needs { opacity: 0.75; }
+.item.dim:hover, .item.dim:focus-within, .item.dim.cursor, .proj.dim > summary:hover { opacity: 1; }
