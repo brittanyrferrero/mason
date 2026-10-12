@@ -226,3 +226,12 @@ body:has(.view-open) { overflow: hidden; }
 /* The divider belongs to the whole item, so a note sits above it, with its session. */
 .item { border-bottom: 1px solid var(--edge); }
 .item .row { border-bottom: 0; }
+
+/* A session's note inside its Open-tab window: one quiet strip under the title bar. */
+.win-note { flex: none; display: flex; align-items: baseline; gap: 7px; border: 0; border-bottom: 1px solid #2c2c2e; background: #232325; color: #c7c7cc; text-align: left; font-size: 12.5px; padding: 6px 12px; max-height: 6.5em; overflow-y: auto; }
+.win-note span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.win-note svg { width: 11px; height: 11px; flex: none; color: #8e8e93; position: relative; top: 1px; }
+.win-note:hover { background: #28282b; }
+.win .note-edit { flex: none; margin: 0; width: 100%; border-radius: 0; border: 0; border-bottom: 1px solid #3a3a3e; background: #232325; color: #f2f2f7; padding: 7px 12px; font-size: 12.5px; }
+.win .note-edit::placeholder { color: #8e8e93; }
+.win-bar .note-x svg { width: 12px; height: 12px; display: block; }

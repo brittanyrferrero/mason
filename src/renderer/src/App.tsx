@@ -104,6 +104,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Change layout', ['⌘', 'L']],
       ['Change order', ['⌘', 'O']],
       ['Next project', ['⌘', 'P']],
+      ['Note on this session', ['⌘', 'N']],
       ['Hide window', ['⌘', '⇧', 'W']],
       ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
@@ -257,8 +258,19 @@ export function App() {
     const known = allSessions.filter(({ s }) => s.host && openHosts.includes(s.host))
     const pending = openHosts
       .filter((h) => !known.some(({ s }) => s.host === h))
-      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, last: Infinity }))
-    const list = [...known.map(({ s, project }) => ({ host: s.host!, project, title: s.title, needs: s.status === 'needs', last: s.lastActivity })), ...pending]
+      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
+    const list = [
+      ...known.map(({ s, project }) => ({
+        host: s.host!,
+        project,
+        title: s.title,
+        needs: s.status === 'needs',
+        last: s.lastActivity,
+        sid: s.id.startsWith('tmux:') ? null : s.id, // notes need the real conversation id
+        myNote: s.myNote
+      })),
+      ...pending
+    ]
     const rank = (h: string) => (order.includes(h) ? order.indexOf(h) : order.length + openHosts.indexOf(h))
     if (sort === 'waiting') return list.sort((a, b) => Number(b.needs) - Number(a.needs))
     if (sort === 'recent') return list.sort((a, b) => (b.last === a.last ? 0 : b.last > a.last ? 1 : -1))
@@ -367,6 +379,11 @@ export function App() {
           return showProject(all[(all.indexOf(only) + 1) % all.length])
         }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
+        if (c === 'KeyN' && !e.shiftKey) {
+          e.preventDefault()
+          const sid = windows.find((w) => w.host === focusHost)?.sid
+          return sid && setNoting(`s:${sid}`)
+        }
         if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
@@ -525,6 +542,11 @@ export function App() {
                     </>
                   ) : (
                     <>
+                      {w.sid && (
+                        <button className="x note-x" type="button" aria-label={w.myNote ? 'Edit note' : 'Add a note'} title={w.myNote ? 'Edit note (⌘N)' : 'Add a note (⌘N)'} onClick={() => setNoting(`s:${w.sid}`)}>
+                          <NoteIcon />
+                        </button>
+                      )}
                       <button className="x" type="button" aria-label="Hide this window (the session keeps running)" title="Hide window · the session keeps running, reopen it from Projects (⌘⇧W)" onClick={() => closeWindow(w.host)}>
                         –
                       </button>
@@ -534,7 +556,25 @@ export function App() {
                     </>
                   )}
                 </div>
-                <Term name={w.host} focus={view === 'open' && focused} tick={tick} />
+                {w.sid && noting === `s:${w.sid}` ? (
+                  <NoteEdit
+                    initial={w.myNote ?? ''}
+                    label={`Note on ${w.title}`}
+                    onDone={(body) => {
+                      saveNote(`s:${w.sid}`, body)
+                      setFocusHost(w.host)
+                      setTick((t) => t + 1) // straight back to typing in the terminal
+                    }}
+                  />
+                ) : (
+                  w.myNote && (
+                    <button className="win-note" type="button" onClick={() => setNoting(`s:${w.sid}`)} title="Edit note (⌘N)">
+                      <NoteIcon />
+                      <span>{w.myNote}</span>
+                    </button>
+                  )
+                )}
+                <Term name={w.host} focus={view === 'open' && focused && noting !== `s:${w.sid}`} tick={tick} />
               </div>
             ]
           })}

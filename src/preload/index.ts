@@ -1,10 +1,12 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
 type HostResult = { host?: string; ok?: boolean; error?: string }
 
 // The whole surface the page gets. Every call names one specific action; there is no generic "run" channel.
 const api = {
   getState: () => ipcRenderer.invoke('state:get'),
+  // Where a file dropped on a terminal lives on disk (Electron no longer puts this on File objects).
+  pathFor: (file: File): string => webUtils.getPathForFile(file),
   onState: (cb: (state: unknown) => void) => {
     const listener = (_e: IpcRendererEvent, state: unknown) => cb(state)
     ipcRenderer.on('state:changed', listener)

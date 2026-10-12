@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type DragEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
-const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP'])
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN'])
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
@@ -76,5 +76,23 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
     if (focus) termRef.current?.focus()
   }, [focus, tick])
 
-  return <div className="term" ref={el} onMouseDown={() => termRef.current?.focus()} />
+  // Dropping files types their paths, like Terminal does, so Claude can pick up a dragged-in screenshot.
+  const onDrop = (e: DragEvent) => {
+    if (!e.dataTransfer.files.length) return
+    e.preventDefault()
+    const paths = [...e.dataTransfer.files].map((f) => window.mason.pathFor(f)).filter(Boolean)
+    if (!paths.length) return
+    // Escaped the way Terminal does it (backslash before spaces and shell characters), which Claude recognizes.
+    window.mason.input(name, paths.map((p) => p.replace(/([ \t'"\\()[\]{}&;|<>*?!$`#~])/g, '\\$1')).join(' ') + ' ')
+    termRef.current?.focus()
+  }
+  return (
+    <div
+      className="term"
+      ref={el}
+      onMouseDown={() => termRef.current?.focus()}
+      onDragOver={(e) => e.dataTransfer.types.includes('Files') && (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))}
+      onDrop={onDrop}
+    />
+  )
 }
