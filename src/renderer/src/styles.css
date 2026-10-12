@@ -235,3 +235,8 @@ body:has(.view-open) { overflow: hidden; }
 .win .note-edit { flex: none; margin: 0; width: 100%; border-radius: 0; border: 0; border-bottom: 1px solid #3a3a3e; background: #232325; color: #f2f2f7; padding: 7px 12px; font-size: 12.5px; }
 .win .note-edit::placeholder { color: #8e8e93; }
 .win-bar .note-x svg { width: 12px; height: 12px; display: block; }
+
+/* Handoff actions under a paused session. */
+.mini-acts { display: flex; gap: 18px; padding: 0 6px 10px 6px; margin-top: -4px; }
+.mini-acts .link { font-size: 13px; }
+.mini-wrap .note-edit { margin: 0 0 10px; width: 100%; }

@@ -228,6 +228,8 @@ export function App() {
   const handle = (r: { host?: string; error?: string }) => (r.host ? showHosts([r.host]) : r.error && flashNote({ text: r.error, tone: 'muted' }))
   const newSession = async (projectId: number) => handle(await window.mason.newSession(projectId))
   const resume = async (id: string) => handle(await window.mason.resume(id))
+  const fresh = async (id: string) => handle(await window.mason.fresh(id))
+  const [editingHandoff, setEditingHandoff] = useState<string | null>(null)
   const move = async (id: string) => {
     flashRow(id, { text: 'Moving into Mason…', tone: 'muted' })
     handle(await window.mason.move(id))
@@ -702,7 +704,8 @@ export function App() {
             {foot === 'paused' && (
               <div className="foot-panel">
                 {state.paused.map((p) => (
-                  <button className="mini resumable" type="button" key={p.id} disabled={!state.canHost} onClick={() => resume(p.id)} title="Resume it inside Mason">
+                  <div className="mini-wrap" key={p.id}>
+                    <button className="mini resumable" type="button" disabled={!state.canHost} onClick={() => resume(p.id)} title="Resume it inside Mason">
                     <div className="mini-text">
                       <span className="mini-title">
                         {p.title}
@@ -712,7 +715,7 @@ export function App() {
                       </span>
                       {p.pickUp && (
                         <span className="mini-sub" title={p.pickUp}>
-                          {p.next ? p.pickUp : `Last: ${p.pickUp}`}
+                          {p.handoff ? `Paused at: ${p.pickUp}` : p.next ? p.pickUp : `Last: ${p.pickUp}`}
                         </span>
                       )}
                       {p.next && (
@@ -728,7 +731,30 @@ export function App() {
                       )}
                     </div>
                     {state.canHost && <span className="acts resume-hint">Resume</span>}
-                  </button>
+                    </button>
+                    {p.handoff &&
+                      (editingHandoff === p.id ? (
+                        <NoteEdit
+                          initial={p.handoff.brief}
+                          label="Handoff brief for a fresh session"
+                          onDone={(brief) => {
+                            setEditingHandoff(null)
+                            if (brief !== null) window.mason.editHandoff(p.id, brief)
+                          }}
+                        />
+                      ) : (
+                        <div className="mini-acts">
+                          {state.canHost && p.handoff.brief && (
+                            <button className="link" type="button" onClick={() => fresh(p.id)} title="Start a brand-new Claude briefed by the handoff, instead of reopening the whole long conversation">
+                              Fresh start
+                            </button>
+                          )}
+                          <button className="link" type="button" onClick={() => setEditingHandoff(p.id)} title="Change the brief a fresh session starts from">
+                            Edit handoff
+                          </button>
+                        </div>
+                      ))}
+                  </div>
                 ))}
               </div>
             )}

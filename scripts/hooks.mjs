@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Adds (or removes) Mason's hooks in ~/.claude/settings.json.
+// Adds (or removes) Mason's hooks in ~/.claude/settings.json, and its /pause command in ~/.claude/commands.
 //   node scripts/hooks.mjs install
 //   node scripts/hooks.mjs uninstall
 // Always backs the file up to ~/.mason/backups first, and only ever touches entries that run ~/.mason/hook.sh.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -51,6 +51,24 @@ const action = process.argv[2]
 if (action !== 'install' && action !== 'uninstall') {
   console.error('usage: node scripts/hooks.mjs install|uninstall')
   process.exit(1)
+}
+
+// /pause: Mason writes the command text to ~/.mason when it starts; this copies it into place.
+// Never overwrites a pause.md that Mason didn't write.
+const COMMAND_SRC = join(homedir(), '.mason', 'pause-command.md')
+const COMMAND = join(homedir(), '.claude', 'commands', 'pause.md')
+const commandIsOurs = () => !existsSync(COMMAND) || readFileSync(COMMAND, 'utf8').includes('Written by Mason')
+if (action === 'install') {
+  if (!existsSync(COMMAND_SRC)) console.log('Open Mason once first (it writes the /pause command), then run this again to add /pause.')
+  else if (!commandIsOurs()) console.log(`Left ${COMMAND} alone: it isn't Mason's. /pause was not installed.`)
+  else {
+    mkdirSync(join(homedir(), '.claude', 'commands'), { recursive: true })
+    copyFileSync(COMMAND_SRC, COMMAND)
+    console.log(`Installed /pause in ${COMMAND}`)
+  }
+} else if (existsSync(COMMAND) && commandIsOurs()) {
+  rmSync(COMMAND)
+  console.log(`Removed ${COMMAND}`)
 }
 
 const settings = strip(load())

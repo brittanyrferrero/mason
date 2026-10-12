@@ -1,6 +1,7 @@
 import type { DB } from './db'
 import type { Need } from './events'
 import type { LiveInfo } from './live'
+import { readHandoffs } from './handoff'
 import { readSummaries, summariesOn } from './summarize'
 import { peek, type Hosted } from './tmux'
 
@@ -19,7 +20,16 @@ export type SessionView = {
   myNote?: string
 }
 
-export type PausedView = { id: string; title: string; project: string; pickUp: string; next?: string; myNote?: string; lastActivity: number }
+export type PausedView = {
+  id: string
+  title: string
+  project: string
+  pickUp: string
+  next?: string
+  myNote?: string
+  handoff?: { stopped: string; next: string; brief: string } // from /pause
+  lastActivity: number
+}
 
 export type AppState = {
   projects: { id: number; name: string; sessions: SessionView[]; myNote?: string }[]
@@ -86,6 +96,7 @@ export function buildState(
   const sums = readSummaries(db)
   const myNotes = new Map((db.prepare('SELECT target, body FROM my_notes').all() as { target: string; body: string }[]).map((n) => [n.target, n.body]))
   const myNote = (id: string) => myNotes.get(`s:${id}`)
+  const handoffs = readHandoffs(db)
   const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>) => prefs.get(r.id)?.name || sums.get(r.id)?.title || r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
   const byProject = new Map<number, AppState['projects'][number]>()
   const add = (pid: number, name: string, s: SessionView) => {
@@ -104,8 +115,10 @@ export function buildState(
         id: r.id,
         title: title(r),
         project: r.project,
-        pickUp: sums.get(r.id)?.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
-        next: sums.get(r.id)?.next || undefined,
+        // A /pause handoff is Claude's own word on where it stopped, so it beats the summary.
+        pickUp: handoffs.get(r.id)?.stopped || sums.get(r.id)?.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
+        next: handoffs.get(r.id)?.next || sums.get(r.id)?.next || undefined,
+        handoff: handoffs.get(r.id),
         myNote: myNote(r.id),
         lastActivity: r.last_activity ?? 0
       })

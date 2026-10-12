@@ -24,7 +24,7 @@ window forward; "Move here" stops it there and resumes the same conversation ins
 
 ## "Waiting on you"
 
-`node scripts/hooks.mjs install` adds Claude Code hooks to `~/.claude/settings.json` (backup in `~/.mason/backups/`).
+`node scripts/hooks.mjs install` adds Claude Code hooks to `~/.claude/settings.json` (backup in `~/.mason/backups/`). It also adds the `/pause` command (`~/.claude/commands/pause.md`): Claude writes a handoff note, Mason files it on the paused list and stops the session.
 They run `~/.mason/hook.sh`, which appends one short line per event to `~/.mason/events.jsonl` — no network.
 Permission prompts and AskUserQuestion turn a session coral, sort it first, and badge the Dock.
 `node scripts/hooks.mjs uninstall` removes exactly those entries.

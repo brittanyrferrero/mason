@@ -80,7 +80,9 @@ export function Term({ name, focus, tick }: { name: string; focus: boolean; tick
   const onDrop = (e: DragEvent) => {
     if (!e.dataTransfer.files.length) return
     e.preventDefault()
-    const paths = [...e.dataTransfer.files].map((f) => window.mason.pathFor(f)).filter(Boolean)
+    // A newline (or any control character) in a file name would act like pressing Enter at a shell prompt and run
+    // whatever follows, so such names are skipped rather than typed.
+    const paths = [...e.dataTransfer.files].map((f) => window.mason.pathFor(f)).filter((p) => p && !/[\x00-\x1f\x7f]/.test(p))
     if (!paths.length) return
     // Escaped the way Terminal does it (backslash before spaces and shell characters), which Claude recognizes.
     window.mason.input(name, paths.map((p) => p.replace(/([ \t'"\\()[\]{}&;|<>*?!$`#~])/g, '\\$1')).join(' ') + ' ')

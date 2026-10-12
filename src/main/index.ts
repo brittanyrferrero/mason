@@ -7,6 +7,7 @@ import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
 import * as term from './pty'
+import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writePauseScript } from './handoff'
 import { buildState } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
@@ -153,6 +154,7 @@ app.whenReady().then(() => {
 
   initTmux()
   writeHookScript()
+  writePauseScript()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
@@ -252,6 +254,44 @@ app.whenReady().then(() => {
     return true
   })
 
+  // /pause: file the handoff note, then stop that copy of the session once Claude has had a moment to reply.
+  const takePauses = () => {
+    for (const { sid, pid } of takeHandoffs(db)) {
+      setTimeout(() => {
+        const live = readLive().get(sid)
+        const copy = live && (live.pid === pid ? live : live.extra.find((c) => c.pid === pid))
+        if (!copy) return // already gone, or the pid isn't a copy of that session: never signal a stranger
+        const host = hostFor(copy)
+        if (host) {
+          term.detach(host)
+          endSession(host)
+        } else process.kill(pid, 'SIGTERM')
+        refreshSoon(false)
+      }, 4000)
+    }
+    refreshSoon(false)
+  }
+  takePauses()
+
+  ipcMain.handle('handoff:edit', (e, id: unknown, brief: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof brief !== 'string') return false
+    const ok = editHandoff(db, id, brief)
+    pushState()
+    return ok
+  })
+
+  // Fresh start: a brand-new Claude in the same folder, briefed by the handoff instead of the whole old conversation.
+  ipcMain.handle('session:fresh', (e, id: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id)) return { error: 'bad request' }
+    const h = readHandoffs(db).get(id)
+    const s = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
+    if (!h?.brief) return { error: 'That session has no handoff to start from.' }
+    if (!s?.cwd || !existsSync(s.cwd)) return { error: 'Its folder no longer exists.' }
+    const host = startSession(s.cwd, undefined, briefFile(id, h.brief))
+    refreshSoon(false)
+    return { host }
+  })
+
   // End: close a Mason session, or stop Claude in a Terminal window (the window itself stays).
   ipcMain.handle('session:end', (e, id: unknown) => {
     if (!trusted(e) || typeof id !== 'string') return false
@@ -311,6 +351,9 @@ app.whenReady().then(() => {
   // Hooks append here the moment Claude asks for permission or a question, so react quickly.
   try {
     watch(DATA_DIR, (_ev, f) => f === basename(EVENTS_FILE) && refreshSoon(false))
+  } catch {}
+  try {
+    watch(HANDOFF_DIR, (_ev, f) => f?.endsWith('.handoff') && setTimeout(takePauses, 300))
   } catch {}
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)

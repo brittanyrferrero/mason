@@ -30,7 +30,7 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] **Rename and pin.** Give a session your own name (R, or the pencil on hover); pinned sessions (P) lead their project.
 - [x] **Summaries.** Claude writes a few words on what each session is about (the row's title line) and
       a two-line "where was I?" recap: what you were doing and the next step. Can be turned off.
-- [ ] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
+- [x] **Handoffs.** When you pause a session (or it gets long), Claude writes a handoff note so a fresh
       session can pick up exactly where it left off. **/pause** inside Claude does this and stops the session;
       the note shows on the paused list and you can edit it.
 - [x] **Persistent notes.** A note on any session or project that survives ending, pausing, and restarts.

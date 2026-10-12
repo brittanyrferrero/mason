@@ -81,12 +81,14 @@ export function listHosted(): Hosted[] {
 
 // Starts your normal login shell in the folder (so your PATH, nvm, etc. all work), then types `claude` into it.
 // If Claude exits, the shell stays, just like a Terminal tab.
-export function startSession(cwd: string, resumeId?: string): string {
+export function startSession(cwd: string, resumeId?: string, briefPath?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
   const name = `ms-${randomBytes(4).toString('hex')}`
   tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '120', '-y', '36'])
   if (resumeId) tmux(['set-option', '-t', name, '@mason_resume', resumeId])
-  tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}` : 'claude'])
+  // A fresh start from a handoff hands Claude the brief as its first message, read from a file so nothing needs quoting.
+  const first = briefPath ? ` "$(cat '${briefPath.replace(/'/g, `'\\''`)}')"` : ''
+  tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}` : `claude${first}`])
   tmux(['send-keys', '-t', name, 'Enter'])
   return name
 }
