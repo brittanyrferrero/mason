@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import type { FoundView } from '../main/state'
 
 type HostResult = { host?: string; ok?: boolean; error?: string }
 
@@ -23,6 +24,7 @@ const api = {
   rename: (id: string, name: string): Promise<boolean> => ipcRenderer.invoke('session:rename', id, name),
   pin: (id: string, pinned: boolean): Promise<boolean> => ipcRenderer.invoke('session:pin', id, pinned),
   star: (id: string, starred: boolean): Promise<boolean> => ipcRenderer.invoke('session:star', id, starred),
+  search: (query: string): Promise<FoundView[]> => ipcRenderer.invoke('session:search', query),
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
 

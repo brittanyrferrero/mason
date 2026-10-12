@@ -69,6 +69,44 @@ type Row = {
   last_activity: number | null
 }
 
+export type FoundView = { id: string; title: string; project: string; pickUp: string; lastActivity: number; starred: boolean }
+
+// Find any past conversation, however old. Every word must appear somewhere in it: your name for it, its summary,
+// Claude's title, the project, what you asked, Claude's last reply, or your note. A "*" limits it to starred ones.
+export function searchPast(db: DB, query: string, exclude: Set<string>): FoundView[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8)
+  const starredOnly = words.includes('*')
+  const terms = words.filter((w) => w !== '*')
+  if (!terms.length && !starredOnly) return []
+  const hay = `lower(COALESCE(sp.name, '') || ' ' || COALESCE(su.title, '') || ' ' || COALESCE(s.ai_title, '') || ' ' || p.name || ' ' ||
+    COALESCE(s.first_prompt, '') || ' ' || COALESCE(s.last_prompt, '') || ' ' || COALESCE(s.last_text, '') || ' ' || COALESCE(su.doing, '') || ' ' || COALESCE(n.body, ''))`
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.ai_title, s.first_prompt, s.last_text, s.last_prompt, s.last_activity, p.name AS project,
+              sp.name, sp.starred, su.title AS sum_title, su.doing
+       FROM sessions s JOIN projects p ON p.id = s.project_id
+       LEFT JOIN session_prefs sp ON sp.session_id = s.id
+       LEFT JOIN summaries su ON su.session_id = s.id
+       LEFT JOIN my_notes n ON n.target = 's:' || s.id
+       WHERE COALESCE(s.entrypoint, 'cli') NOT LIKE 'sdk%'
+         ${starredOnly ? 'AND sp.starred = 1' : ''}
+         ${terms.map(() => `AND instr(${hay}, ?) > 0`).join(' ')}
+       ORDER BY s.last_activity DESC LIMIT 60`
+    )
+    .all(...terms) as (Row & { project: string; name: string | null; starred: number | null; sum_title: string | null; doing: string | null })[]
+  return rows
+    .filter((r) => !exclude.has(r.id))
+    .slice(0, 30)
+    .map((r) => ({
+      id: r.id,
+      title: r.name || r.sum_title || r.ai_title || oneLine(r.first_prompt, 60) || 'Untitled conversation',
+      project: r.project,
+      pickUp: r.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
+      lastActivity: r.last_activity ?? 0,
+      starred: !!r.starred
+    }))
+}
+
 export function buildState(
   db: DB,
   live: Map<string, LiveInfo>,

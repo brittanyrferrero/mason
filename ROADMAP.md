@@ -44,7 +44,7 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] **Focus on one.** F (or the target on hover) puts a session first and dims the rest; "Focusing on …  Stop" up top.
 - [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
 - [ ] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
-- [ ] **Type to filter** the list by title, project, or note.
+- [x] **Find** (/ or ⌘F): filters the live list as you type and searches every past conversation, any age; click to resume. `*` for starred.
 
 Not doing: time cues ("working 40 min") and nudges about sessions waiting too long.
 

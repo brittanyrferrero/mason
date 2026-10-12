@@ -8,7 +8,7 @@ import { CLAUDE_SESSIONS, readLive } from './live'
 import { projectIdFor } from './projects'
 import * as term from './pty'
 import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writePauseScript } from './handoff'
-import { buildState } from './state'
+import { buildState, searchPast } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
 import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, TMUX, unscroll } from './tmux'
@@ -246,6 +246,11 @@ app.whenReady().then(() => {
     db.prepare('INSERT INTO session_prefs (session_id, name) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET name = excluded.name').run(id, clean || null)
     pushState()
     return true
+  })
+  // Find box: past conversations of any age (live ones are already on screen).
+  ipcMain.handle('session:search', (e, query: unknown) => {
+    if (!trusted(e) || typeof query !== 'string') return []
+    return searchPast(db, query.slice(0, 200), new Set(readLive().keys()))
   })
   ipcMain.handle('session:star', (e, id: unknown, starred: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof starred !== 'boolean') return false

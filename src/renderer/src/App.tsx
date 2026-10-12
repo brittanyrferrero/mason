@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { AppState, SessionView } from '../../main/state'
+import type { AppState, FoundView, SessionView } from '../../main/state'
 import type { MasonApi } from '../../preload'
 import { Term } from './Term'
 
@@ -77,6 +77,12 @@ const FocusIcon = () => (
     <circle cx="12" cy="12" r="3.5" />
   </svg>
 )
+const SearchIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+)
 const KeyboardIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
@@ -102,6 +108,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Pin', ['P']],
       ['Star', ['*']],
       ['Focus on this one', ['F']],
+      ['Find', ['/']],
       ['Note on a session', ['N']],
       ['Shush', ['S']],
       ['Show this', ['?']]
@@ -227,6 +234,18 @@ export function App() {
     setOpenHosts((hs) => hs.filter((h) => alive.has(h) || !seenHosts.current.has(h)))
   }, [state])
 
+  // Find: filters the live list as you type, and searches every past conversation below it.
+  const [finding, setFinding] = useState(false)
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<FoundView[]>([])
+  const q = query.trim()
+  useEffect(() => {
+    if (!q) return setFound([])
+    const t = setTimeout(() => window.mason.search(q).then(setFound), 150)
+    return () => clearTimeout(t)
+  }, [q, state])
+  const closeFind = () => (setFinding(false), setQuery(''))
+
   // Focus: one session you're working on. It leads the list and everything else dims. Remembered on this Mac.
   const [focusOn, setFocusOn] = useState<string | null>(() => stored('focus', '') || null)
   useEffect(() => store('focus', focusOn ?? ''), [focusOn])
@@ -235,14 +254,22 @@ export function App() {
     if (state && focusOn && !focusRow) setFocusOn(null) // it ended or was paused
   }, [state, focusOn, focusRow])
   const projects = useMemo(() => {
-    const list = state?.projects ?? []
+    let list = state?.projects ?? []
+    if (q) {
+      const words = q.toLowerCase().split(/\s+/)
+      const starredOnly = words.includes('*')
+      const terms = words.filter((w) => w !== '*')
+      const hit = (s: SessionView, p: (typeof list)[number]) =>
+        (!starredOnly || s.starred) && terms.every((w) => [s.title, s.now, p.name, s.myNote ?? '', p.myNote ?? ''].join(' ').toLowerCase().includes(w))
+      list = list.map((p) => ({ ...p, sessions: p.sessions.filter((s) => hit(s, p)) })).filter((p) => p.sessions.length)
+    }
     if (!focusOn) return list
     const lead = (p: (typeof list)[number]) => p.sessions.some((s) => s.id === focusOn)
     return [...list.filter(lead).map((p) => ({ ...p, sessions: [...p.sessions].sort((a, b) => Number(b.id === focusOn) - Number(a.id === focusOn)) })), ...list.filter((p) => !lead(p))]
-  }, [state, focusOn])
+  }, [state, focusOn, q])
 
-  const isOpen = (id: number) => (shushed ? opened.has(id) : !closed.has(id)) || projects.some((p) => p.id === id && p.sessions.some((s) => s.id === focusOn))
-  const visibleRows = useMemo(() => projects.flatMap((p) => (isOpen(p.id) ? p.sessions : [])), [projects, shushed, closed, opened])
+  const isOpen = (id: number) => !!q || (shushed ? opened.has(id) : !closed.has(id)) || projects.some((p) => p.id === id && p.sessions.some((s) => s.id === focusOn))
+  const visibleRows = useMemo(() => projects.flatMap((p) => (isOpen(p.id) ? p.sessions : [])), [projects, shushed, closed, opened, q])
 
   const flashNote = (n: Note) => {
     setNote(n)
@@ -438,6 +465,10 @@ export function App() {
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
       if (view === 'open' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (view === 'projects' && (e.key === '/' || (e.metaKey && e.code === 'KeyF')) && !(e.target as Element).closest?.('input, textarea')) {
+        e.preventDefault()
+        return setFinding(true)
+      }
       if ((e.target as Element).closest?.('input, textarea')) return
       const k = e.key.toLowerCase()
       if (e.key === '?') return e.preventDefault(), setKeysOpen((v) => !v)
@@ -636,6 +667,36 @@ export function App() {
       </section>
 
       <main className="col" hidden={view !== 'projects'}>
+        {finding ? (
+          <div className="top find">
+            <SearchIcon />
+            <input
+              className="find-input"
+              autoFocus
+              value={query}
+              placeholder="Find a session, live or past…  (* for starred)"
+              aria-label="Find a session"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Escape') return closeFind()
+                if (e.key === 'Enter') {
+                  const live = visibleRows[0]
+                  if (live) return open(live)
+                  if (found[0]) return resume(found[0].id)
+                }
+                if (e.key === 'ArrowDown' && visibleRows[0]) {
+                  e.preventDefault()
+                  setCursor(visibleRows[0].id)
+                  e.currentTarget.blur()
+                }
+              }}
+            />
+            <button className="link" type="button" onClick={closeFind}>
+              Close
+            </button>
+          </div>
+        ) : (
         <div className="top">
           {note ? (
             <p className={`note ${note.tone}`}>{note.text}</p>
@@ -658,15 +719,22 @@ export function App() {
                 Open all {hosted.length}
               </button>
             )}
+            <button className="pill" type="button" onClick={() => setFinding(true)} title="Find a session, live or past (/)">
+              <SearchIcon />
+              <span>Find</span>
+            </button>
             <button className="pill" type="button" aria-pressed={shushed} onClick={() => setShushed((v) => !v)}>
               <ShushIcon />
               <span>{shushed ? 'Shushed' : 'Shush'}</span>
             </button>
           </div>
         </div>
+        )}
 
         {!state ? (
           <p className="empty">Reading your sessions…</p>
+        ) : q && !projects.length ? (
+          !found.length && <p className="empty">Nothing matches “{q}”.</p>
         ) : state.projects.length === 0 ? (
           <p className="empty">No Claude sessions are running right now. Resume one from paused below.</p>
         ) : (
@@ -752,7 +820,36 @@ export function App() {
           </div>
         )}
 
-        {state && (
+        {q && found.length > 0 && (
+          <div className="past">
+            <h3>Past conversations</h3>
+            {found.map((f) => (
+              <button className="mini resumable" type="button" key={f.id} disabled={!state?.canHost} onClick={() => resume(f.id)} title="Resume it inside Mason">
+                <div className="mini-text">
+                  <span className="mini-title">
+                    {f.title}
+                    {f.starred && (
+                      <span className="starred" title="Starred">
+                        <StarIcon filled />
+                      </span>
+                    )}
+                    <small>
+                      {f.project} · {ago(f.lastActivity)}
+                    </small>
+                  </span>
+                  {f.pickUp && (
+                    <span className="mini-sub" title={f.pickUp}>
+                      Last: {f.pickUp}
+                    </span>
+                  )}
+                </div>
+                {state?.canHost && <span className="acts resume-hint">Resume</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {state && !q && (
           <div className="foot">
             <div className="foot-links">
               {state.paused.length > 0 && (

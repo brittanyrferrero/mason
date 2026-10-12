@@ -271,3 +271,10 @@ body:has(.view-open) { overflow: hidden; }
 .item.dim, .proj.dim > summary { opacity: 0.4; transition: opacity 0.15s; }
 .item.dim.dim-needs { opacity: 0.75; }
 .item.dim:hover, .item.dim:focus-within, .item.dim.cursor, .proj.dim > summary:hover { opacity: 1; }
+
+/* Find */
+.top.find { justify-content: flex-start; align-items: center; gap: 10px; border-bottom: 1px solid var(--edge); padding-bottom: 8px; }
+.top.find svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.find-input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); outline: none; user-select: text; }
+.find-input::placeholder { color: var(--faint); }
+.past h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
