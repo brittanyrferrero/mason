@@ -386,3 +386,11 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 
 /* When the windows scroll, leave room on the right so the scroll bar doesn't sit on their edges. */
 .wins.layout-grid, .wins.layout-stack { padding-right: 14px; }
+
+/* "12 sessions from … viewed … organized …" lives in the tab row now, on the right beside ? (and Update). */
+.tabs .desk-bar { margin: 0 0 0 auto; align-self: center; padding: 0 10px 2px; text-align: right; }
+.tabs .desk-bar ~ .update-btn { margin-left: 4px; }
+.tabs .desk-bar ~ .keys-btn { margin-left: 4px; }
+
+/* The windows' scroll bar runs along Mason's right edge; the windows themselves keep the page margin. */
+.wins.layout-grid, .wins.layout-stack { margin-right: -20px; padding-right: 20px; }

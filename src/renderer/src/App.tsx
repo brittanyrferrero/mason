@@ -765,6 +765,19 @@ export function App() {
         <button className="tab" role="tab" type="button" aria-selected={view === 'open'} disabled={!windows.length} onClick={() => setView('open')}>
           Open <span className="count">{windows.length}</span>
         </button>
+        {/* In the tab row, beside ? and Update, so the Open tab keeps that line for windows. */}
+        {view === 'open' && (n > 1 || openProjects.length > 1) && (
+          <p className="desk-bar">
+            {n} sessions{' '}
+            {openProjects.length > 1 && (
+              <>
+                from <Pick label="Project" value={only} options={[['', 'all projects'], ...openProjects.map((p): [string, string] => [p, p])]} onChange={showProject} />{' '}
+              </>
+            )}
+            viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
+            <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
+          </p>
+        )}
         {state?.update && (
           <button
             className="update-btn"
@@ -872,18 +885,6 @@ export function App() {
 
       {/* Kept mounted (just hidden) so terminals don't reconnect every time you switch tabs. */}
       <section className="desk" hidden={view !== 'open'}>
-        {(n > 1 || openProjects.length > 1) && (
-          <p className="desk-bar">
-            {n} sessions{' '}
-            {openProjects.length > 1 && (
-              <>
-                from <Pick label="Project" value={only} options={[['', 'all projects'], ...openProjects.map((p): [string, string] => [p, p])]} onChange={showProject} />{' '}
-              </>
-            )}
-            viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
-            <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
-          </p>
-        )}
         <div className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols, gridTemplateRows: rows }}>
           {windows.flatMap((w) => {
             const hidden = only && w.project && w.project !== only
