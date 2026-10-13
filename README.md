@@ -1,10 +1,40 @@
-# Mason
+<p align="center">
+  <img src="build/icon.png" width="88" alt="">
+</p>
 
-One quiet place for all your Claude Code sessions: what each one is doing, what's waiting on you, and where you left off.
+<h1 align="center">Mason</h1>
 
-A local macOS desktop app (Electron). It has no network port and nothing leaves your Mac except the summaries it will later ask Claude to write.
+<p align="center"><b>A home for all your Claude Code sessions</b><br>
+What each one is doing, what's waiting on you, and where you left off.</p>
 
-## Run it
+<p align="center"><a href="https://mason-builds.vercel.app">Website</a> · <a href="#install">Install</a> · <a href="ROADMAP.md">Roadmap</a></p>
+
+<p align="center">
+  <img src="docs/images/projects.png" width="420" alt="Mason's project list: sessions grouped by project, with a coral dot on the one waiting for you">
+</p>
+
+- **Every session in one list**, grouped by project, with a dot for working, quiet, or waiting on you
+- **Sessions live inside Mason** and keep running when you close the window or quit
+- **Remember where you were**: a two-line recap per session, `/pause` handoffs, and notes that stick
+- **Catch a thought fast** with <kbd>⌃⌥N</kbd> from any app, or `/stash` inside Claude
+
+A local macOS desktop app (Electron). It has no network port and nothing leaves your Mac except the short summaries it asks Claude to write, which you can turn off.
+
+## Install
+
+You need a Mac with Apple silicon, [Claude Code](https://docs.claude.com/en/docs/claude-code), [Homebrew](https://brew.sh), and Node.js 20 or newer.
+
+```sh
+git clone https://github.com/brittanyrferrero/mason.git ~/mason && cd ~/mason
+brew install tmux && npm install
+node scripts/hooks.mjs install   # "waiting on you", /pause and /stash (backs up your settings first)
+scripts/install-app.sh           # builds Mason.app into ~/Applications and opens it
+```
+
+Then press <kbd>⌃⌥M</kbd> from anywhere to bring Mason forward, and <kbd>?</kbd> inside it for the help card.
+To update, pull and run `scripts/install-app.sh` again; running sessions keep going.
+
+## Working on Mason
 
 ```sh
 npm install      # once (also needs: brew install tmux)
@@ -48,7 +78,7 @@ npx electron-vite build
 
 ## Status
 
-See [ROADMAP.md](ROADMAP.md) for what's done and what's next. The full plan is in [ROADMAP.md](ROADMAP.md).
+See [ROADMAP.md](ROADMAP.md) for what's done and what's next.
 
 ### Signing (so macOS remembers permissions)
 
