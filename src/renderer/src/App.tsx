@@ -458,7 +458,7 @@ export function App() {
   }
 
   // Windows in the Open tab. "Project" holds still; "busiest first" follows the list as it reorders. The sorts are stable.
-  // Focus (Open tab): one window you're working in leads, and the others dim. Remembered on this Mac.
+  // Focus (Open tab): the window you're working in stays bright and the others dim. Remembered on this Mac.
   const [spotlight, setSpotlight] = useState<string | null>(() => stored('spotlight', '') || null)
   useEffect(() => store('spotlight', spotlight ?? ''), [spotlight])
   const recentSnap = useRef<{ sort: string; at: Map<string, number> }>({ sort: '', at: new Map() })
@@ -505,10 +505,8 @@ export function App() {
     const at = (m: Map<string, number>, k: string) => m.get(k) ?? Infinity
     return list.sort((a, b) => at(snap.projects, a.project) - at(snap.projects, b.project) || at(snap.hosts, a.host) - at(snap.hosts, b.host))
   }, [allSessions, openHosts, sort, order])
-  const windows = useMemo(
-    () => (spotlight && sortedWindows.some((w) => w.host === spotlight) ? [...sortedWindows].sort((a, b) => Number(b.host === spotlight) - Number(a.host === spotlight)) : sortedWindows),
-    [sortedWindows, spotlight]
-  )
+  // Focus (the target, ⌘⇧F) only dims the other windows; nothing moves, so your layout stays where you left it.
+  const windows = sortedWindows
   const spot = windows.length > 1 && windows.some((w) => w.host === spotlight) ? spotlight : null
   const toggleSpotlight = (host: string) => setSpotlight((cur) => (cur === host ? null : host))
   // Resting: a window nobody has touched for 10 minutes (not you, not Claude) gets a quieter title bar.
@@ -607,6 +605,9 @@ export function App() {
   // (another copy, or one still starting); a bare shell with no conversation has none.
   const prefId = (s: SessionView) => s.sid ?? (s.id.startsWith('tmux:') ? null : s.id)
   const hasPrefs = (s: SessionView) => !!prefId(s)
+  // Dragging a session onto another project (Projects tab).
+  const [carrying, setCarrying] = useState<{ id: string; from: number } | null>(null)
+  const [movingTo, setMovingTo] = useState<number | null>(null)
   const rename = (s: SessionView, name: string) => {
     setRenaming(null)
     if (name.trim() !== s.title && prefId(s)) window.mason.rename(prefId(s)!, name)
@@ -985,7 +986,7 @@ export function App() {
                           className={`x spot-x ${spot === w.host ? 'on' : ''}`}
                           type="button"
                           aria-label={spot === w.host ? 'Stop focusing on this window' : 'Focus on this window'}
-                          title={spot === w.host ? 'Stop focusing (⌘⇧F)' : 'Focus on this window: it goes first and the others dim (⌘⇧F)'}
+                          title={spot === w.host ? 'Stop focusing (⌘⇧F)' : 'Focus on this window: the others dim, nothing moves (⌘⇧F)'}
                           onClick={() => toggleSpotlight(w.host)}
                         >
                           <FocusIcon />
@@ -1131,7 +1132,24 @@ export function App() {
               const moving = p.sessions.some((s) => s.status === 'working')
               const inMason = p.sessions.filter((s) => s.host)
               return (
-                <details key={p.id} className="proj" open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
+                <details
+                  key={p.id}
+                  className={`proj ${movingTo === p.id ? 'drop-here' : ''}`}
+                  open={isOpen(p.id)}
+                  onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}
+                  onDragOver={(e) => {
+                    if (!carrying || carrying.from === p.id) return
+                    e.preventDefault()
+                    setMovingTo(p.id)
+                  }}
+                  onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setMovingTo(null)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (carrying && carrying.from !== p.id) window.mason.moveTo(carrying.id, p.id)
+                    setCarrying(null)
+                    setMovingTo(null)
+                  }}
+                >
                   <summary>
                     <Chevron />
                     {renamingProject === p.id ? (
@@ -1207,8 +1225,17 @@ export function App() {
                   )}
                   <div className="body">
                     {p.sessions.map((s) => (
-                      <Row
+                      <div
                         key={s.id}
+                        className={carrying?.id === prefId(s) ? 'carried' : undefined}
+                        draggable={hasPrefs(s) && renaming !== s.id && noting !== `s:${prefId(s)}`}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = 'move'
+                          setCarrying({ id: prefId(s)!, from: p.id })
+                        }}
+                        onDragEnd={() => (setCarrying(null), setMovingTo(null))}
+                      >
+                      <Row
                         s={s}
                         cursor={cursor === s.id}
                         note={rowNote?.id === s.id ? rowNote.note : null}
@@ -1232,6 +1259,7 @@ export function App() {
                         onConfirmEnd={() => end(s)}
                         onCancelEnd={() => setConfirming(null)}
                       />
+                      </div>
                     ))}
                   </div>
                 </details>

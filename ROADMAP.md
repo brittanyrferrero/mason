@@ -25,7 +25,7 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] Spin-off: /spinoff <thought> in Claude, or ⌘⇧N, starts a side thought as a new session in the same folder
 - [x] From easl: ⌘J to the next waiting session, a Mac notification when one starts waiting, drag text into a session
 - [x] Plain terminals inside Mason (+ New terminal per project, ⌘T in the Open tab) and + New project for any folder
-- [x] Open tab by project: group windows under project headings, or show just one project (⌘P)
+- [x] Open tab by project: group windows under project headings, or show just one project (⌘P). "By project" holds still; "busiest first" lets busy projects and waiting sessions rise
 - [x] Scroll back through a session's history inside Mason
 
 ## Now (in this order)
@@ -47,8 +47,11 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
       `/stash later …` park a thought. A hook files it in **Saved** and blocks the prompt, so Claude never takes a turn.
 - [x] **Help card** (? top right): what the dots mean, the commands you can type inside Claude, the global hotkey,
       then the keyboard shortcuts. The empty Saved list explains how to fill it.
-- [x] **Focus on one** (Open tab). The target in a window's title bar (⌘⇧F) puts that window first and dims the others.
+- [x] **Focus on one** (Open tab). The target in a window's title bar (⌘⇧F) dims the other windows; nothing moves.
 - [x] **Expand** (Open tab). The arrows in a window's title bar (⌘E) make it fill Mason; shrink drops it back
+- [x] **Recent edge** (Open tab). The window you just clicked away from keeps a really faint white edge for five minutes
+- [x] **Resting** (Open tab). A window untouched for 10 minutes, by you or Claude, gets a quieter title bar; working and waiting ones never do
+- [x] **Move a session to another project**: drag its row onto the project in the Projects tab. It stays there; following its folders never moves it back
       into the grid, stack, or whatever layout was there. Nothing about the layout changes.
 - [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
 - [x] **Done today.** A small list of what got finished today, from ended sessions and their summaries.

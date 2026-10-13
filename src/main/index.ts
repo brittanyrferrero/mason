@@ -463,6 +463,15 @@ app.whenReady().then(() => {
     return searchPast(db, query.slice(0, 200), new Set(readLive().keys()))
   })
   // Your own name for a project; empty goes back to its folder name.
+  // Drag a session onto another project. Remembered, so following its folders never moves it back.
+  ipcMain.handle('session:move-to', (e, id: unknown, projectId: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof projectId !== 'number') return false
+    if (!db.prepare('SELECT 1 FROM projects WHERE id = ?').get(projectId)) return false
+    const r = db.prepare('UPDATE sessions SET project_id = ?, placed = 1 WHERE id = ?').run(projectId, id)
+    pushState()
+    return r.changes > 0
+  })
+
   ipcMain.handle('project:rename', (e, id: unknown, name: unknown) => {
     if (!trusted(e) || typeof id !== 'number' || typeof name !== 'string') return false
     const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(id) as { root: string } | undefined

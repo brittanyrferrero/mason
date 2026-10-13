@@ -155,7 +155,7 @@ function followRepo(db: DB, id: string): void {
     if (pid) score.set(pid, (score.get(pid) ?? 0) + d.n)
   }
   const [best, n] = [...score].sort((a, b) => b[1] - a[1])[0] ?? []
-  if (best && n >= 5) db.prepare('UPDATE sessions SET project_id = ? WHERE id = ?').run(best, id)
+  if (best && n >= 5) db.prepare('UPDATE sessions SET project_id = ? WHERE id = ? AND placed = 0').run(best, id)
 }
 
 // Reads only what's new since last time. Subagent transcripts live in subfolders and are skipped.
