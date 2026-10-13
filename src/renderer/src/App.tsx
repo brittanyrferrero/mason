@@ -104,6 +104,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Move', ['↑', '↓']],
       ['Open', ['↵']],
       ['Open all', ['A']],
+      ['Open starred', ['⇧', 'A']],
       ['Rename', ['R']],
       ['Pin', ['P']],
       ['Star', ['*']],
@@ -321,6 +322,19 @@ export function App() {
     else flashRow(s.id, r.ok ? { text: 'Brought its Terminal window to the front ✓', tone: 'ok' } : { text: 'Couldn’t find its Terminal window', tone: 'muted' })
   }
   const openAll = (sessions: SessionView[]) => showHosts(sessions.flatMap((s) => (s.host ? [s.host] : [])))
+  // Every starred conversation in the Open tab: ones in Mason open, paused ones resume here. A starred session
+  // running in a Terminal window stays put (taking it over means stopping it), so you're told instead.
+  const starredLive = allSessions.filter(({ s }) => s.starred)
+  const starredPaused = (state?.paused ?? []).filter((p) => p.starred)
+  const starredCount = new Set([...starredLive.map(({ s }) => s.sid ?? s.id), ...starredPaused.map((p) => p.id)]).size
+  const openStarred = async () => {
+    const hosts = starredLive.flatMap(({ s }) => (s.host ? [s.host] : []))
+    const inTerminal = starredLive.filter(({ s }) => !s.host).length
+    const resumed = await Promise.all(starredPaused.map((p) => window.mason.resume(p.id)))
+    showHosts([...hosts, ...resumed.flatMap((r) => (r.host ? [r.host] : []))])
+    if (inTerminal)
+      flashNote({ text: `${inTerminal} starred session${inTerminal > 1 ? 's are' : ' is'} in a Terminal window. Use “Move here” to bring ${inTerminal > 1 ? 'them' : 'it'} in.`, tone: 'muted' })
+  }
   const handle = (r: { host?: string; error?: string }) => (r.host ? showHosts([r.host]) : r.error && flashNote({ text: r.error, tone: 'muted' }))
   const newSession = async (projectId: number) => handle(await window.mason.newSession(projectId))
   const resume = async (id: string) => handle(await window.mason.resume(id))
@@ -532,6 +546,7 @@ export function App() {
       if (e.key === '?') return e.preventDefault(), setKeysOpen((v) => !v)
       if (e.key === 'Escape') return setKeysOpen(false), setCursor(null), setConfirming(null)
       if (k === 's') return setShushed((v) => !v)
+      if (k === 'a' && e.shiftKey) return starredCount ? openStarred() : undefined
       if (k === 'a') return openAll(allSessions.map(({ s }) => s))
       const sel = visibleRows.find((s) => s.id === cursor)
       if (k === 'r' && sel && hasPrefs(sel)) return e.preventDefault(), setRenaming(sel.id)
@@ -831,6 +846,12 @@ export function App() {
             {hosted.length > 0 && (
               <button className="pill" type="button" onClick={() => openAll(hosted.map(({ s }) => s))}>
                 Open all {hosted.length}
+              </button>
+            )}
+            {state?.canHost && starredCount > 0 && (
+              <button className="pill" type="button" onClick={openStarred} title="Open every starred session here; paused ones resume (⇧A)">
+                <StarIcon filled />
+                <span>Open starred {starredCount}</span>
               </button>
             )}
             <button className="pill" type="button" onClick={() => setFinding(true)} title="Find a session, live or past (/)">
