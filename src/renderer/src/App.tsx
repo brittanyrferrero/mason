@@ -11,7 +11,7 @@ declare global {
 
 type Theme = 'auto' | 'light' | 'dark'
 type View = 'projects' | 'open'
-type Sort = 'project' | 'waiting' | 'recent' | 'custom'
+type Sort = 'project' | 'busy' | 'waiting' | 'recent' | 'custom'
 type Layout = 'grid' | 'side' | 'stack' | 'one'
 type Note = { text: string; tone: 'ok' | 'muted' }
 
@@ -174,6 +174,7 @@ const IN_CLAUDE: [string, string][] = [
 
 const SORTS: [Sort, string][] = [
   ['project', 'by project'],
+  ['busy', 'by project, busiest first'],
   ['waiting', 'waiting first'],
   ['recent', 'by recent activity'],
   ['custom', 'by hand']
@@ -455,7 +456,7 @@ export function App() {
     else setOpenHosts((hs) => hs.filter((h) => h !== host))
   }
 
-  // Windows in the Open tab. "Project" keeps the same order as the list; the sorts are stable, so ties stay in it.
+  // Windows in the Open tab. "Project" holds still; "busiest first" follows the list as it reorders. The sorts are stable.
   // Focus (Open tab): one window you're working in leads, and the others dim. Remembered on this Mac.
   const [spotlight, setSpotlight] = useState<string | null>(() => stored('spotlight', '') || null)
   useEffect(() => store('spotlight', spotlight ?? ''), [spotlight])
@@ -490,6 +491,7 @@ export function App() {
       return list.sort((a, b) => (at.get(b.host)! === at.get(a.host)! ? 0 : at.get(b.host)! > at.get(a.host)! ? 1 : -1))
     }
     if (sort === 'custom') return list.sort((a, b) => rank(a.host) - rank(b.host))
+    if (sort === 'busy') return list // follows the Projects list, which moves busy projects and waiting sessions up
     // By project: projects and their windows keep the place they had when they first showed up, so activity
     // (which reorders the Projects list) never shuffles the windows you're working in.
     const snap = projectSnap.current
@@ -534,7 +536,7 @@ export function App() {
     }
     return g
   }, [shown])
-  const grouped = sort === 'project' && !one && !only && groups.length > 1
+  const grouped = (sort === 'project' || sort === 'busy') && !one && !only && groups.length > 1
   const widest = grouped ? Math.max(...groups.map((g) => g.hosts.length)) : n
   const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, widest) : widest <= 1 ? 1 : widest === 2 || widest === 4 ? 2 : 3
   const rows = grouped ? groups.map((g) => `auto repeat(${Math.ceil(g.hosts.length / cols)}, var(--row))`).join(' ') : undefined
@@ -741,7 +743,8 @@ export function App() {
             className="update-btn"
             type="button"
             aria-expanded={updateOpen}
-            title="A newer Mason is ready"
+            // Hovering shows what's new; clicking opens the card with Update now.
+            title={['What’s new:', ...state.update.notes.map((n) => `• ${n}`), ...(state.update.count > state.update.notes.length ? [`• and ${state.update.count - state.update.notes.length} more`] : []), '', 'Click to update'].join('\n')}
             onClick={() => setUpdateOpen((v) => !v)}
           >
             <span className="update-dot" aria-hidden="true" />
