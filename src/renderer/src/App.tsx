@@ -955,8 +955,10 @@ export function App() {
                       }}
                     />
                   ) : (
-                    <b onDoubleClick={(e) => w.sid && (e.stopPropagation(), setRenamingHost(w.host))} title={w.sid ? 'Double-click to rename' : undefined}>
-                      {w.project && !grouped && !only && <span className="wp">{w.project}</span>}
+                    <b
+                      onDoubleClick={(e) => w.sid && (e.stopPropagation(), setRenamingHost(w.host))}
+                      title={[w.project, w.sid ? 'double-click to rename' : ''].filter(Boolean).join(' · ') || undefined}
+                    >
                       {w.title}
                       {w.focus && <span className="wf"> · {w.focus}</span>}
                     </b>
