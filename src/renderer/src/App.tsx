@@ -308,6 +308,7 @@ export function App() {
   const showHosts = (hosts: string[]) => {
     if (!hosts.length) return
     setOpenHosts((hs) => [...new Set([...hs, ...hosts])])
+    reveal.current = true
     setFocusHost(hosts[0])
     setView('open')
   }
@@ -336,9 +337,12 @@ export function App() {
     if (!s.id.startsWith('tmux:')) flashNote({ text: `Ended “${s.title}”. It’s in paused if you want it back.`, tone: 'muted' })
   }
 
-  // Stacked windows scroll; keep the focused one in view when ⌘[ / ⌘] moves focus.
+  // Stacked windows scroll; bring the focused one into view when ⌘[ / ⌘] (or opening a session) moves focus there.
+  // Clicking into a window never scrolls: the window you clicked stays exactly where it was.
+  const reveal = useRef(false)
   useEffect(() => {
-    if (view !== 'open' || !focusHost) return
+    if (view !== 'open' || !focusHost || !reveal.current) return
+    reveal.current = false
     document.querySelector(`.win[data-host="${focusHost}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [focusHost, layout, view])
 
@@ -354,6 +358,7 @@ export function App() {
   // Focus (Open tab): one window you're working in leads, and the others dim. Remembered on this Mac.
   const [spotlight, setSpotlight] = useState<string | null>(() => stored('spotlight', '') || null)
   useEffect(() => store('spotlight', spotlight ?? ''), [spotlight])
+  const recentSnap = useRef<{ sort: string; at: Map<string, number> }>({ sort: '', at: new Map() })
   const sortedWindows = useMemo(() => {
     // One window per host, whatever the list says: a repeated React key would leave stray copies on screen.
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
@@ -373,8 +378,15 @@ export function App() {
       ...pending
     ]
     const rank = (h: string) => (order.includes(h) ? order.indexOf(h) : order.length + openHosts.indexOf(h))
+    if (sort !== 'recent') recentSnap.current.sort = sort // so picking "recent" again sorts afresh
     if (sort === 'waiting') return list.sort((a, b) => Number(b.needs) - Number(a.needs))
-    if (sort === 'recent') return list.sort((a, b) => (b.last === a.last ? 0 : b.last > a.last ? 1 : -1))
+    // Sorted when you pick it (or a window opens), then held still, so the window you're typing in doesn't jump.
+    if (sort === 'recent') {
+      if (recentSnap.current.sort !== sort) recentSnap.current = { sort, at: new Map() }
+      const at = recentSnap.current.at
+      for (const w of list) if (!at.has(w.host)) at.set(w.host, w.last)
+      return list.sort((a, b) => (at.get(b.host)! === at.get(a.host)! ? 0 : at.get(b.host)! > at.get(a.host)! ? 1 : -1))
+    }
     if (sort === 'custom') return list.sort((a, b) => rank(a.host) - rank(b.host))
     return list
   }, [allSessions, openHosts, sort, order])
@@ -418,6 +430,7 @@ export function App() {
   const step = (dir: number) => {
     if (!n) return
     const i = shown.findIndex((w) => w.host === focusHost)
+    reveal.current = true
     setFocusHost(shown[(i < 0 ? 0 : i + dir + n) % n].host)
   }
   const showProject = (p: string) => {
