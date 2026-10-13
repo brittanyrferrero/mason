@@ -37,6 +37,7 @@ export type PausedView = {
 }
 
 export type AppState = {
+  update?: { count: number; notes: string[] } | null // newer Mason on GitHub (filled in by index.ts)
   projects: { id: number; name: string; sessions: SessionView[]; myNote?: string; kept?: boolean }[]
   paused: PausedView[]
   // Things you parked: /stash in Claude, or quick capture (⌃⌥N). Newest first.

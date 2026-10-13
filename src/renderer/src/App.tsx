@@ -203,6 +203,8 @@ export function App() {
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
   // Peek: a session enlarged over the list, live, so you can answer it without leaving Projects.
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updating, setUpdating] = useState(false)
   const [peeking, setPeeking] = useState<{ host: string; id: string } | null>(null)
   const [foot, setFoot] = useState<'paused' | 'saved' | 'done' | 'scratch' | null>(null)
   // Notes you've tucked away ('s:<id>' / 'p:<id>'); the pen brings them back. Remembered on this Mac.
@@ -458,6 +460,7 @@ export function App() {
   const [spotlight, setSpotlight] = useState<string | null>(() => stored('spotlight', '') || null)
   useEffect(() => store('spotlight', spotlight ?? ''), [spotlight])
   const recentSnap = useRef<{ sort: string; at: Map<string, number> }>({ sort: '', at: new Map() })
+  const projectSnap = useRef({ projects: new Map<string, number>(), hosts: new Map<string, number>() })
   const sortedWindows = useMemo(() => {
     // One window per host, whatever the list says: a repeated React key would leave stray copies on screen.
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
@@ -487,7 +490,15 @@ export function App() {
       return list.sort((a, b) => (at.get(b.host)! === at.get(a.host)! ? 0 : at.get(b.host)! > at.get(a.host)! ? 1 : -1))
     }
     if (sort === 'custom') return list.sort((a, b) => rank(a.host) - rank(b.host))
-    return list
+    // By project: projects and their windows keep the place they had when they first showed up, so activity
+    // (which reorders the Projects list) never shuffles the windows you're working in.
+    const snap = projectSnap.current
+    for (const w of list) {
+      if (w.project && !snap.projects.has(w.project)) snap.projects.set(w.project, snap.projects.size)
+      if (w.project && !snap.hosts.has(w.host)) snap.hosts.set(w.host, snap.hosts.size)
+    }
+    const at = (m: Map<string, number>, k: string) => m.get(k) ?? Infinity
+    return list.sort((a, b) => at(snap.projects, a.project) - at(snap.projects, b.project) || at(snap.hosts, a.host) - at(snap.hosts, b.host))
   }, [allSessions, openHosts, sort, order])
   const windows = useMemo(
     () => (spotlight && sortedWindows.some((w) => w.host === spotlight) ? [...sortedWindows].sort((a, b) => Number(b.host === spotlight) - Number(a.host === spotlight)) : sortedWindows),
@@ -725,6 +736,52 @@ export function App() {
         <button className="tab" role="tab" type="button" aria-selected={view === 'open'} disabled={!windows.length} onClick={() => setView('open')}>
           Open <span className="count">{windows.length}</span>
         </button>
+        {state?.update && (
+          <button
+            className="update-btn"
+            type="button"
+            aria-expanded={updateOpen}
+            title="A newer Mason is ready"
+            onClick={() => setUpdateOpen((v) => !v)}
+          >
+            <span className="update-dot" aria-hidden="true" />
+            Update
+          </button>
+        )}
+        {updateOpen && state?.update && (
+          <div className="update-pop" role="dialog" aria-label="Update Mason">
+            <h4>What’s new</h4>
+            <ul>
+              {state.update.notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+              {state.update.count > state.update.notes.length && <li className="muted">and {state.update.count - state.update.notes.length} more</li>}
+            </ul>
+            {updating ? (
+              <p className="help-note">Updating… Mason will close and reopen in a minute or two. Your sessions keep running.</p>
+            ) : (
+              <>
+                <p className="help-note">Mason rebuilds itself and reopens. Your sessions keep running.</p>
+                <div className="update-actions">
+                  <button
+                    className="update-go"
+                    type="button"
+                    onClick={async () => {
+                      const r = await window.mason.runUpdate()
+                      if (r.ok) setUpdating(true)
+                      else flashNote({ text: r.error ?? 'Couldn’t start the update.', tone: 'muted' })
+                    }}
+                  >
+                    Update now
+                  </button>
+                  <button className="link" type="button" onClick={() => setUpdateOpen(false)}>
+                    Later
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <button className="keys-btn" type="button" aria-expanded={keysOpen} aria-label="Help and shortcuts" title="Help and shortcuts (?)" onClick={() => setKeysOpen((v) => !v)}>
           <span className="help-q">?</span>
         </button>

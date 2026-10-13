@@ -7,6 +7,7 @@ import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript
 import { SPINOFF_DIR, spinPrompt, takeSpinoffs, writeSpinoffCommand } from './spinoff'
 import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { TRAY_1X, TRAY_2X } from './trayIcon'
+import { checkForUpdate, runUpdate, updateInfo } from './updates'
 import { rememberHostedIds, rememberTerminals, reopenAfterRestart } from './reopen'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
@@ -39,7 +40,9 @@ function state() {
   const live = readLive()
   const needs = readEvents()
   pruneNeeds(new Set(live.keys()))
-  return buildState(db, live, needs, listHosted(), projectFor, !!TMUX)
+  // `--fake-update` (developer snapshots only) shows the Update button without a real update.
+  const update = DEV_CHECK && process.argv.includes('--fake-update') ? { count: 2, notes: ['Peek, menu bar icon, and reopen after restart', 'Quick capture and /stash'] } : updateInfo()
+  return { ...buildState(db, live, needs, listHosted(), projectFor, !!TMUX), update }
 }
 
 function send(channel: string, ...args: unknown[]): void {
@@ -261,7 +264,7 @@ function createWindow(): void {
         // Wait until the list has rendered before pressing anything.
         for (let i = 0; i < 40 && !(await win!.webContents.executeJavaScript(`!!document.querySelector('.proj')`)); i++) await new Promise((r) => setTimeout(r, 250))
         for (const key of keys) {
-          const r = await win!.webContents.executeJavaScript(`(${JSON.stringify(key)} === "!" ? document.querySelector(".pill").click() : ${JSON.stringify(key)} === "~" ? [...document.querySelectorAll(".foot-btn")].find((b) => /saved|Saved/.test(b.textContent)).click() : window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))); document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length`)
+          const r = await win!.webContents.executeJavaScript(`(${JSON.stringify(key)} === "!" ? document.querySelector(".pill").click() : ${JSON.stringify(key)} === "@" ? document.querySelector(".update-btn").click() : ${JSON.stringify(key)} === "~" ? [...document.querySelectorAll(".foot-btn")].find((b) => /saved|Saved/.test(b.textContent)).click() : window.dispatchEvent(new KeyboardEvent("keydown", { key: ${JSON.stringify(key)} }))); document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length`)
           console.log('[snapshot] after key', key, r)
           await new Promise((r) => setTimeout(r, 2500))
           console.log('[snapshot] later', await win!.webContents.executeJavaScript(`document.querySelector('.tab[aria-selected=true]')?.textContent + ' wins=' + document.querySelectorAll('.win').length + ' hidden=' + document.querySelector('.desk')?.hidden`))
@@ -545,6 +548,15 @@ app.whenReady().then(() => {
     watch(STASH_DIR, (_ev, f) => f?.endsWith('.json') && setTimeout(takeStashed, 300))
   } catch {}
   setInterval(takeStashed, 20_000) // one waiting for its transcript to be read in
+
+  // Updates: a quiet check now and then; updating only ever happens when you click.
+  const checkUpdates = () => checkForUpdate().then((changed) => changed && refreshSoon(false))
+  if (!DEV_CHECK) {
+    setTimeout(checkUpdates, 30_000)
+    setInterval(checkUpdates, 6 * 60 * 60_000)
+  }
+  ipcMain.handle('update:check', async (e) => (trusted(e) ? (await checkForUpdate(), updateInfo()) : null))
+  ipcMain.handle('update:run', (e) => (trusted(e) ? runUpdate((msg) => send('mason:notice', msg)) : { ok: false }))
 
   ipcMain.handle('saved:remove', (e, id: unknown) => {
     if (!trusted(e) || !Number.isInteger(id)) return false

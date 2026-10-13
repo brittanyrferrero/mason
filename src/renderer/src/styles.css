@@ -338,3 +338,15 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .spin-box { flex: none; border: 0; border-bottom: 1px solid #3a3a3e; background: #232325; color: #f2f2f7; font: inherit; font-size: 12.5px; padding: 7px 12px; outline: none; user-select: text; }
 .spin-box::placeholder { color: #8e8e93; }
 .mini.saved[draggable='true'] { cursor: grab; }
+
+/* ---- Update: a quiet button that only shows up when there's something new ---- */
+.update-btn { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--edge); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 11px 3px 9px; font-size: 12.5px; font-weight: 500; }
+.update-btn:hover, .update-btn[aria-expanded='true'] { color: var(--ink); background: var(--card); }
+.update-btn + .update-pop + .keys-btn, .update-btn + .keys-btn { margin-left: 4px; }
+.update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--go); }
+.update-pop { position: absolute; right: 36px; top: calc(100% + 8px); z-index: 20; width: 300px; background: var(--card); border: 1px solid var(--edge); border-radius: 14px; padding: 14px 16px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12); display: grid; gap: 10px; font-size: 13.5px; }
+.update-pop h4 { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+.update-pop ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-soft); }
+.update-pop .muted { color: var(--muted); }
+.update-actions { display: flex; align-items: center; gap: 14px; }
+.update-go { border: 0; background: var(--ink); color: var(--paper); border-radius: 9px; padding: 6px 14px; font-size: 13.5px; font-weight: 500; }

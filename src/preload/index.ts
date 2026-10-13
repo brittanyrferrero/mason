@@ -43,6 +43,8 @@ const api = {
   },
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
   removeSaved: (id: number): Promise<boolean> => ipcRenderer.invoke('saved:remove', id),
+  checkUpdate: (): Promise<{ count: number; notes: string[] } | null> => ipcRenderer.invoke('update:check'),
+  runUpdate: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('update:run'),
 
   // Sent by the menu bar: peek at a waiting session, or show a one-off message.
   onPeek: (cb: (target: { host: string; id: string } | null, id: string) => void) => {

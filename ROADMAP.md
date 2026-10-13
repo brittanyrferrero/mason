@@ -56,6 +56,8 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 
 Not doing: time cues ("working 40 min") and nudges about sessions waiting too long.
 
+- [x] **Updates:** Mason checks GitHub now and then; a quiet **Update** button (top right) shows what's new and rebuilds and reopens Mason on click. Sessions keep running.
+
 ## Later
 
 - [x] **Bring Mason forward** from anywhere with ⌃⌥M (press again to put it away)

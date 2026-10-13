@@ -314,7 +314,7 @@ npm install</pre></li>
     </ol>
     <details class="notes">
       <summary>Updating, uninstalling, and the escape hatch</summary>
-      <p><b>Updating.</b> Pull the latest code and run <code>scripts/install-app.sh</code> again. Running sessions keep going and reappear when the new version opens.</p>
+      <p><b>Updating.</b> When there's a new version, a quiet <b>Update</b> button shows up at the top right of Mason with what's new. Click it and Mason rebuilds and reopens itself; running sessions keep going. You can also pull the latest code and run <code>scripts/install-app.sh</code> yourself.</p>
       <p><b>Uninstalling.</b> <code>node scripts/hooks.mjs uninstall</code> removes exactly what it added. Then delete Mason.app and <code>~/.mason</code>.</p>
       <p><b>Escape hatch.</b> From any Terminal, <code>tmux -L mason ls</code> lists Mason's sessions and <code>tmux -L mason attach -t &lt;name&gt;</code> opens one.</p>
     </details>
@@ -334,7 +334,7 @@ npm install</pre></li>
 
   <section>
     <h2>How it's built</h2>
-    <p class="lede">Mason has no network port. It reads what Claude Code already writes to disk and keeps its own data in one SQLite file. The only thing that leaves your Mac is the short summaries it asks Claude to write, and you can turn those off.</p>
+    <p class="lede">Mason has no network port. It reads what Claude Code already writes to disk and keeps its own data in one SQLite file. The only things that leave your Mac are the short summaries it asks Claude to write (you can turn those off) and a quiet check on GitHub for a newer version.</p>
     <div class="stack">
       <div><b>Electron</b><span>Desktop shell, menu bar, global hotkeys</span></div>
       <div><b>React</b><span>The Quiet list UI</span></div>

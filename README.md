@@ -18,7 +18,7 @@ What each one is doing, what's waiting on you, and where you left off.</p>
 - **Remember where you were**: a two-line recap per session, `/pause` handoffs, and notes that stick
 - **Catch a thought fast** with <kbd>⌃⌥N</kbd> from any app, or `/stash` inside Claude
 
-A local macOS desktop app (Electron). It has no network port and nothing leaves your Mac except the short summaries it asks Claude to write, which you can turn off.
+A local macOS desktop app (Electron). It has no network port and nothing leaves your Mac except the short summaries it asks Claude to write (which you can turn off) and a quiet check on GitHub for a newer version.
 
 ## Install
 
@@ -32,7 +32,7 @@ scripts/install-app.sh           # builds Mason.app into ~/Applications and open
 ```
 
 Then press <kbd>⌃⌥M</kbd> from anywhere to bring Mason forward, and <kbd>?</kbd> inside it for the help card.
-To update, pull and run `scripts/install-app.sh` again; running sessions keep going.
+**Updates:** when there's a new version, a quiet **Update** button appears at the top right of Mason with what's new. Click it and Mason pulls, rebuilds and reopens itself; running sessions keep going. (Or update by hand: `git pull` and `scripts/install-app.sh`.)
 
 ## Working on Mason
 
