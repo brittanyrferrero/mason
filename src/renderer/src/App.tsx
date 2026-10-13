@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, FoundView, SessionView } from '../../main/state'
 import type { MasonApi } from '../../preload'
-import { Term } from './Term'
+import { Term, type Footer } from './Term'
 
 declare global {
   interface Window {
@@ -239,6 +239,7 @@ export function App() {
       return []
     }
   })
+  const [footers, setFooters] = useState<Record<string, Footer>>({}) // Claude's mode line, per window, shown as a chip
   const [spinning, setSpinning] = useState<string | null>(null) // window whose "side thought" box is open
   const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
   const [dragging, setDragging] = useState<string | null>(null)
@@ -930,6 +931,11 @@ export function App() {
                   onDoubleClick={(e) => n > 1 && !(e.target as Element).closest('button') && toggleOne(w.host)}
                 >
                   {w.needs && <span className="dot needs" title="Waiting on you" />}
+                  {footers[w.host]?.mode && (
+                    <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
+                      {footers[w.host]!.mode}
+                    </span>
+                  )}
                   {renamingHost === w.host && w.sid ? (
                     <input
                       className="win-rename"
@@ -993,7 +999,7 @@ export function App() {
                         </button>
                       )}
                       {w.sid && (
-                        <button className="x" type="button" aria-label="Rename this session" title="Rename (or double-click the title)" onClick={() => setRenamingHost(w.host)}>
+                        <button className="x note-x" type="button" aria-label="Rename this session" title="Rename (or double-click the title)" onClick={() => setRenamingHost(w.host)}>
                           <RenameIcon />
                         </button>
                       )}
@@ -1053,7 +1059,12 @@ export function App() {
                   w.myNote &&
                   !tucked.has(`s:${w.sid}`) && <NoteView body={w.myNote} className="win-note" onEdit={() => setNoting(`s:${w.sid}`)} onTuck={() => tuck(`s:${w.sid}`, true)} />
                 )}
-                <Term name={w.host} focus={view === 'open' && focused && noting !== `s:${w.sid}`} tick={tick} />
+                <Term
+                  name={w.host}
+                  focus={view === 'open' && focused && noting !== `s:${w.sid}`}
+                  tick={tick}
+                  onFooter={(f) => setFooters((m) => (m[w.host]?.text === f?.text ? m : { ...m, [w.host]: f }))}
+                />
               </div>
             ]
           })}

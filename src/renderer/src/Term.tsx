@@ -6,13 +6,22 @@ import '@xterm/xterm/css/xterm.css'
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
 const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF', 'KeyJ'])
 
+// Claude's footer: the permission-mode line ("⏵⏵ auto mode on (shift+tab to cycle) · ← for agents") or the plain
+// "? for shortcuts" hint. Mason tucks it out of sight and shows the mode as a small chip in the window's title bar.
+const FOOTER_RE = /(?:⏵⏵|⏸|⏵)\s*\S.*\bon\b|shift\+tab to cycle|\? for shortcuts/
+const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mode\s+)?on\b/i.exec(line)?.[1].replace(/\s*mode$/i, '') ?? null
+
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
 // `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
-export function Term({ name, focus, tick, peek = false }: { name: string; focus: boolean; tick: number; peek?: boolean }) {
+export type Footer = { mode: string | null; text: string } | null
+
+export function Term({ name, focus, tick, peek = false, onFooter }: { name: string; focus: boolean; tick: number; peek?: boolean; onFooter?: (f: Footer) => void }) {
   const client = peek ? `${name}~peek` : name
   const el = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const footerCb = useRef(onFooter)
+  footerCb.current = onFooter
 
   useEffect(() => {
     const host = el.current
@@ -42,8 +51,39 @@ export function Term({ name, focus, tick, peek = false }: { name: string; focus:
       }
       return false
     })
+    // Claude gets one row more than fits. That row sits just below the visible edge: when it holds Claude's footer,
+    // the footer stays out of sight (its mode shows in Mason's title bar instead). When it holds anything else
+    // (a permission prompt, a menu), the view shifts up a row so nothing that needs you is ever hidden.
+    const fitPlus = () => {
+      const d = fit.proposeDimensions()
+      if (!d || !Number.isFinite(d.rows) || !Number.isFinite(d.cols)) return
+      const rows = Math.max(5, d.rows + 1)
+      if (t.cols !== d.cols || t.rows !== rows) t.resize(d.cols, rows)
+    }
+    let lastFooter = ''
+    let frame = 0
+    const tuck = () => {
+      frame = 0
+      const buf = t.buffer.active
+      const last = buf.getLine(buf.viewportY + t.rows - 1)?.translateToString(true).trim() ?? ''
+      const isFooter = FOOTER_RE.test(last)
+      const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
+      const rowH = screen ? screen.clientHeight / t.rows : 0
+      // Exactly one row is out of sight: the bottom one (the footer), or, shifted up, the top one.
+      if (t.element && rowH) {
+        t.element.style.transform = isFooter ? '' : `translateY(-${rowH}px)`
+        t.element.style.clipPath = isFooter ? `inset(0 0 ${rowH}px 0)` : `inset(${rowH}px 0 0 0)`
+      }
+      const key = isFooter ? last : ''
+      if (key !== lastFooter) {
+        lastFooter = key
+        footerCb.current?.(isFooter ? { mode: modeOf(last), text: last } : null)
+      }
+    }
+    const soon = () => frame || (frame = requestAnimationFrame(tuck))
+    const parsed = t.onWriteParsed(soon)
     try {
-      fit.fit()
+      fitPlus()
     } catch {}
     termRef.current = t
 
@@ -54,16 +94,21 @@ export function Term({ name, focus, tick, peek = false }: { name: string; focus:
       if (!ok) t.write('\x1b[2mThis session has ended.\x1b[0m\r\n')
     })
     const input = t.onData((d) => window.mason.input(client, d))
-    const resize = t.onResize(({ cols, rows }) => window.mason.resize(client, cols, rows))
+    const resize = t.onResize(({ cols, rows }) => {
+      window.mason.resize(client, cols, rows)
+      soon()
+    })
     const ro = new ResizeObserver(() => {
       try {
-        fit.fit()
+        fitPlus()
       } catch {}
     })
     ro.observe(host)
 
     return () => {
       ro.disconnect()
+      cancelAnimationFrame(frame)
+      parsed.dispose()
       input.dispose()
       resize.dispose()
       offData()

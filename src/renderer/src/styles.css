@@ -371,3 +371,9 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .title-focus { color: var(--muted); font-weight: 400; }
 .win-bar .wf { color: #8e8e93; font-weight: 400; }
 .win-rename { flex: 1; min-width: 0; border: 1px solid #48484a; background: #1c1c1e; color: #f2f2f7; border-radius: 5px; font: 500 12px var(--body); padding: 2px 6px; outline: none; }
+
+/* Claude gets one row more than shows; Term clips it (its footer, normally) and shows the mode in the title bar. */
+.term { overflow: hidden; }
+.term .xterm { height: auto; }
+.win-bar .mode-chip { flex: none; font-size: 11px; color: #8e8e93; border: 1px solid #3a3a3e; border-radius: 999px; padding: 0 7px; line-height: 16px; white-space: nowrap; }
+.win-bar .mode-chip.auto, .win-bar .mode-chip.bypass { color: #c7c7cc; }
