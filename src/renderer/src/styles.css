@@ -30,6 +30,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* Keep room for the scrollbar so opening or folding projects never nudges the page sideways. The Open tab doesn't scroll. */
+html { scrollbar-gutter: stable; }
+html:has(.view-open) { scrollbar-gutter: auto; }
 body {
   background: var(--paper);
   color: var(--ink);
@@ -68,6 +71,9 @@ kbd { font-family: var(--body); font-size: 11.5px; min-width: 20px; text-align: 
 .pill:hover { background: var(--card); }
 .pill svg { width: 15px; height: 15px; }
 .pill[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+/* A label that changes words keeps the width of its longest one (data-wide), so the buttons beside it don't shift. */
+.fit { display: inline-grid; }
+.fit::after { content: attr(data-wide); visibility: hidden; height: 0; }
 .empty { margin: 8px 4px; font-size: 15px; color: var(--muted); }
 
 details > summary { list-style: none; cursor: pointer; }
@@ -270,6 +276,10 @@ body:has(.view-open) { overflow: hidden; }
 /* Expanded: fills Mason below the drag strip; the grid underneath keeps its place. */
 .win.expanded { position: fixed; inset: 36px 12px 12px; z-index: 30; opacity: 1; }
 .win.dim:hover, .win.dim.focused, .win.dim:focus-within { opacity: 1; }
+/* Recent (Open tab): a really faint edge on the window you just left, gone after five minutes, no animation. */
+.win.recent { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent), 0 10px 30px rgba(0, 0, 0, 0.18); }
+/* Resting (Open tab): untouched for 10 minutes; only the title bar goes quiet. */
+.win.resting .win-bar { background: #222224; color: #8e8e93; }
 .win-bar .spot-x svg { width: 12px; height: 12px; display: block; }
 .win-bar .spot-x.on { color: var(--go); }
 
@@ -350,3 +360,6 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .update-pop .muted { color: var(--muted); }
 .update-actions { display: flex; align-items: center; gap: 14px; }
 .update-go { border: 0; background: var(--ink); color: var(--paper); border-radius: 9px; padding: 6px 14px; font-size: 13.5px; font-weight: 500; }
+
+/* Grid: rows keep a usable height (about half the area, never under 340px); more rows scroll, like the stack. */
+.wins.layout-grid { overflow-y: auto; padding-bottom: 2px; --row: minmax(max(340px, 48%), 1fr); grid-auto-rows: var(--row); }

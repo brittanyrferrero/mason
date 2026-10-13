@@ -261,6 +261,13 @@ function createWindow(): void {
       setTimeout(async () => {
         // Optional `--keys=a` presses keys first, e.g. "a" (Open all) to capture the Open tab.
         const keys = process.argv.find((a) => a.startsWith('--keys='))?.split('=')[1] ?? ''
+        // Optional `--layout=grid|side|stack|one` sets the Open tab layout first (in the dev-only preferences).
+        const layout = process.argv.find((a) => a.startsWith('--layout='))?.split('=')[1]
+        if (layout) {
+          await win!.webContents.executeJavaScript(`localStorage.setItem('openLayout', ${JSON.stringify(layout)})`)
+          win!.webContents.reload()
+          await new Promise((r) => win!.webContents.once('did-finish-load', () => r(null)))
+        }
         // Wait until the list has rendered before pressing anything.
         for (let i = 0; i < 40 && !(await win!.webContents.executeJavaScript(`!!document.querySelector('.proj')`)); i++) await new Promise((r) => setTimeout(r, 250))
         for (const key of keys) {
@@ -287,6 +294,8 @@ function createWindow(): void {
 // Developer checks run alongside a normal Mason, so they skip the one-copy-only rule.
 const DEV_CHECK = process.argv.some((a) => a === '--dump-state' || a.startsWith('--snapshot='))
 if (!DEV_CHECK && !app.requestSingleInstanceLock()) app.quit()
+// Developer checks get their own preferences (theme, layout, shush…), so they never change your real Mason's.
+if (DEV_CHECK) app.setPath('userData', join(app.getPath('temp'), `mason-dev-check-${process.pid}`))
 
 app.on('second-instance', () => {
   if (!win) return createWindow()

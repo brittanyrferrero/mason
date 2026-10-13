@@ -467,13 +467,14 @@ export function App() {
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
     const pending = openHosts
       .filter((h) => !known.some(({ s }) => s.host === h))
-      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
+      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, working: true, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
     const list = [
       ...known.map(({ s, project }) => ({
         host: s.host!,
         project,
         title: s.title,
         needs: s.status === 'needs',
+        working: s.status === 'working',
         last: s.lastActivity,
         sid: s.sid ?? (s.id.startsWith('tmux:') ? null : s.id), // notes belong to the conversation, whichever copy this is
         myNote: s.myNote
@@ -508,6 +509,26 @@ export function App() {
   )
   const spot = windows.length > 1 && windows.some((w) => w.host === spotlight) ? spotlight : null
   const toggleSpotlight = (host: string) => setSpotlight((cur) => (cur === host ? null : host))
+  // Resting: a window nobody has touched for 10 minutes (not you, not Claude) gets a quieter title bar.
+  const touched = useRef(new Map<string, number>())
+  const [clock, setClock] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setClock(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+  const touch = (host: string) => touched.current.set(host, Date.now())
+  const resting = (w: (typeof windows)[number]) => !w.needs && !w.working && clock - Math.max(w.last, touched.current.get(w.host) ?? 0) > 10 * 60_000
+  // Recent: the window you just clicked away from keeps a faint edge for five minutes, a breadcrumb back to it.
+  const [left, setLeft] = useState<Record<string, number>>({})
+  const lastFocus = useRef(focusHost)
+  useEffect(() => {
+    const prev = lastFocus.current
+    lastFocus.current = focusHost
+    if (!prev || prev === focusHost) return
+    setLeft((l) => ({ ...l, [prev]: Date.now() }))
+    const t = setTimeout(() => setLeft((l) => ({ ...l })), 5 * 60_000 + 100) // re-render so the edge goes
+    return () => clearTimeout(t)
+  }, [focusHost])
   // Expand: one window fills Mason for a while; shrinking drops it back into the layout, which never changed.
   const [expanded, setExpanded] = useState<string | null>(null)
   const big = windows.some((w) => w.host === expanded) ? expanded : null
@@ -872,8 +893,9 @@ export function App() {
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''}`}
-                onFocusCapture={() => setFocusHost(w.host)}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''} ${n > 1 && !one && !focused && Date.now() - (left[w.host] ?? 0) < 5 * 60_000 ? 'recent' : ''} ${n > 1 && !one && !focused && resting(w) ? 'resting' : ''}`}
+                onFocusCapture={() => (touch(w.host), setFocusHost(w.host))}
+                onKeyDownCapture={() => touch(w.host)}
                 onDragOver={(e) => {
                   if (!dragging || dragging === w.host) return
                   e.preventDefault()
@@ -1057,7 +1079,9 @@ export function App() {
             </button>
             <button className="pill" type="button" aria-pressed={shushed} onClick={() => setShushed((v) => !v)}>
               <ShushIcon />
-              <span>{shushed ? 'Shushed' : 'Shush'}</span>
+              <span className="fit" data-wide="Shushed">
+                {shushed ? 'Shushed' : 'Shush'}
+              </span>
             </button>
           </div>
         </div>
