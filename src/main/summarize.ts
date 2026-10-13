@@ -94,7 +94,7 @@ function excerpt(path: string): string {
 const PROMPT = `You write tiny status notes for someone with ADHD who juggles many Claude Code sessions and needs to remember where each one was.
 Read the conversation excerpt and reply with ONLY a JSON object, no code fence:
 {"title": "...", "focus": "...", "doing": "...", "next": "..."}
-- title: 2-5 words naming the overall topic of the whole session (e.g. "Mason design", "Room booking cancel flow"). It should stay steady: if a previous title is given and still fits the session as a whole, repeat it exactly. No quotes, no trailing period.
+- title: 2-5 words naming the overall topic of the whole session (e.g. "Window design", "Tablet cancel flow"). Leave out the project or repo name; it's shown separately. It should stay steady: if a previous title is given and still fits the session as a whole, repeat it exactly. No quotes, no trailing period.
 - focus: 1-3 words, lowercase unless a proper noun: the specific part being worked on right now within that topic (e.g. "buttons", "cancel email"). Empty string if it would just repeat the title.
 - doing: one short sentence, what was being worked on most recently, in plain words.
 - next: one short sentence, the very next step. If Claude ended by asking something, start with "Waiting on you: ". If the work is finished and nothing is left, write exactly "Done for now". Under 15 words.`

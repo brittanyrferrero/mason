@@ -55,6 +55,15 @@ export type AppState = {
 const RECENT_MS = 30 * 24 * 60 * 60 * 1000
 const PAUSED_LIMIT = 25
 
+// Automatic titles often lead with the project ("Mason UI tweaks" under mason), which the list already says.
+// Drops that leading name ("Room booking cancel flow" under room-booking too). Your own names are left alone.
+export function withoutProject(title: string, project: string): string {
+  if (!project || project === 'Home') return title
+  const name = project.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[-_\s]+/g, '[-_\\s]+')
+  const rest = new RegExp(`^${name}(?:['’]s)?(?:\\s*[:—–-]\\s*|\\s+)(.+)$`, 'i').exec(title.trim())?.[1]
+  return rest && rest.length >= 3 ? rest[0].toUpperCase() + rest.slice(1) : title
+}
+
 function oneLine(text: string | null, max = 140): string {
   if (!text) return ''
   const line =
@@ -108,7 +117,7 @@ export function searchPast(db: DB, query: string, exclude: Set<string>): FoundVi
     .slice(0, 30)
     .map((r) => ({
       id: r.id,
-      title: r.name || r.sum_title || r.ai_title || oneLine(r.first_prompt, 60) || 'Untitled conversation',
+      title: r.name || withoutProject(r.sum_title || r.ai_title || oneLine(r.first_prompt, 60) || 'Untitled conversation', r.project),
       project: r.project,
       pickUp: r.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
       lastActivity: r.last_activity ?? 0,
@@ -151,7 +160,8 @@ export function buildState(
   const myNotes = new Map((db.prepare('SELECT target, body FROM my_notes').all() as { target: string; body: string }[]).map((n) => [n.target, n.body]))
   const myNote = (id: string) => myNotes.get(`s:${id}`)
   const handoffs = readHandoffs(db)
-  const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>) => prefs.get(r.id)?.name || sums.get(r.id)?.title || r.ai_title || oneLine(r.first_prompt, 60) || 'New session'
+  const title = (r: Pick<Row, 'id' | 'ai_title' | 'first_prompt'>, project: string) =>
+    prefs.get(r.id)?.name || withoutProject(sums.get(r.id)?.title || r.ai_title || oneLine(r.first_prompt, 60) || 'New session', project)
   const byProject = new Map<number, AppState['projects'][number]>()
   const add = (pid: number, name: string, s: SessionView) => {
     if (!byProject.has(pid)) byProject.set(pid, { id: pid, name, sessions: [] })
@@ -167,7 +177,7 @@ export function buildState(
       if (paused.length >= PAUSED_LIMIT) continue
       paused.push({
         id: r.id,
-        title: title(r),
+        title: title(r, r.project),
         project: r.project,
         // A /pause handoff is Claude's own word on where it stopped, so it beats the summary.
         pickUp: handoffs.get(r.id)?.stopped || sums.get(r.id)?.doing || oneLine(r.last_text) || oneLine(r.last_prompt),
@@ -189,7 +199,7 @@ export function buildState(
       claimed.add(h)
       add(r.project_id, r.project, {
         id: `tmux:${h}`,
-        title: title(r),
+        title: title(r, r.project),
         focus: sums.get(r.id)?.focus || undefined,
         now: 'Another copy of this conversation. End the ones you don’t need.',
         status: c.status,
@@ -204,7 +214,7 @@ export function buildState(
     }
     add(r.project_id, r.project, {
       id: r.id,
-      title: title(r),
+      title: title(r, r.project),
       focus: sums.get(r.id)?.focus || undefined,
       // While Claude works, its latest words are the freshest news; once it stops, the recap says where you were.
       now:
@@ -257,7 +267,7 @@ export function buildState(
     const seen = peek(h.name)
     add(p.id, p.name, {
       id: `tmux:${h.name}`,
-      title: r ? title(r) : 'New session',
+      title: r ? title(r, p.name) : 'New session',
       now: seen === 'trust' ? 'Asking whether to trust this folder' : seen === 'shell' ? 'Claude isn’t running here' : 'Starting Claude…',
       status: seen === 'trust' ? 'needs' : 'idle',
       branch: null,
@@ -278,7 +288,7 @@ export function buildState(
       .all() as { id: number; kind: string; body: string; at: number; session_id: string | null }[]
   ).map((n) => {
     const s = n.session_id ? (db.prepare('SELECT id, ai_title, first_prompt FROM sessions WHERE id = ?').get(n.session_id) as Pick<Row, 'id' | 'ai_title' | 'first_prompt'> | undefined) : undefined
-    return { id: n.id, kind: (['message', 'idea', 'later'].includes(n.kind) ? n.kind : 'idea') as 'message' | 'idea' | 'later', body: n.body, at: n.at, from: s ? title(s) : null }
+    return { id: n.id, kind: (['message', 'idea', 'later'].includes(n.kind) ? n.kind : 'idea') as 'message' | 'idea' | 'later', body: n.body, at: n.at, from: s ? title(s, '') : null }
   })
 
   const midnight = new Date()
