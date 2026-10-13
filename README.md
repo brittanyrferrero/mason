@@ -10,7 +10,7 @@ What each one is doing, what's waiting on you, and where you left off.</p>
 <p align="center"><a href="https://mason-builds.vercel.app">Website</a> · <a href="#install">Install</a> · <a href="ROADMAP.md">Roadmap</a></p>
 
 <p align="center">
-  <img src="docs/images/projects.png" width="420" alt="Mason's project list: sessions grouped by project, with a coral dot on the one waiting for you">
+  <img src="docs/images/projects-dark.png" width="420" alt="Mason's project list: sessions grouped by project, with a coral dot on the one waiting for you">
 </p>
 
 - **Every session in one list**, grouped by project, with a dot for working, quiet, or waiting on you
