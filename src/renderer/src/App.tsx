@@ -255,6 +255,52 @@ export function App() {
     setOpenHosts((hs) => hs.filter((h) => alive.has(h) || !seenHosts.current.has(h)))
   }, [state])
 
+  // The Open tab comes back the way you left it: same windows, same focus, same tab. Each window is saved with
+  // the conversation it shows, so after a Mac restart (when Mason reopens them under new names) they still match.
+  type SavedWindow = { host: string; sid: string | null }
+  const restored = useRef(false)
+  const convOf = (h: string) => {
+    const s = allSessions.find((x) => x.s.host === h)?.s
+    return s ? (s.sid ?? (s.id.startsWith('tmux:') ? null : s.id)) : null
+  }
+  useEffect(() => {
+    if (restored.current || !state) return
+    restored.current = true
+    let saved: SavedWindow[] = []
+    try {
+      saved = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
+    } catch {}
+    const alive = new Set(hosted.map(({ s }) => s.host!))
+    const hostOfConv = new Map(hosted.flatMap(({ s }) => (s.sid ?? s.id).startsWith('tmux:') ? [] : [[s.sid ?? s.id, s.host!] as const]))
+    const now = new Map<string, string>() // saved name -> today's name
+    for (const w of saved) {
+      const h = alive.has(w.host) ? w.host : w.sid ? hostOfConv.get(w.sid) : undefined
+      if (h) now.set(w.host, h)
+    }
+    const hosts = [...new Set(now.values())]
+    if (!hosts.length) return
+    setOpenHosts(hosts)
+    setOrder((o) => o.map((h) => now.get(h) ?? h))
+    const f = stored('openFocus', '')
+    setFocusHost(now.get(f) ?? hosts[0])
+    if (stored('openView', 'projects') === 'open') setView('open')
+  }, [state])
+  useEffect(() => {
+    if (!restored.current) return
+    let prev: SavedWindow[] = []
+    try {
+      prev = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
+    } catch {}
+    // A window still starting has no conversation yet; keep the one saved before rather than forgetting it.
+    store('openWindows', JSON.stringify(openHosts.map((h) => ({ host: h, sid: convOf(h) ?? prev.find((w) => w.host === h)?.sid ?? null }))))
+  }, [openHosts, allSessions])
+  useEffect(() => {
+    if (restored.current) store('openFocus', focusHost ?? '')
+  }, [focusHost])
+  useEffect(() => {
+    if (restored.current) store('openView', view)
+  }, [view])
+
   // Find: filters the live list as you type, and searches every past conversation below it.
   const [finding, setFinding] = useState(false)
   const [query, setQuery] = useState('')
