@@ -36,7 +36,7 @@ Permission prompts and AskUserQuestion turn a session coral, sort it first, and 
 - `src/preload/` — the tiny, fixed bridge the window is allowed to use.
 - `src/renderer/` — the Quiet list UI (React).
 
-Sessions are grouped by the folder they started in; git worktrees roll up into one project. Automated runs (`claude -p`, SDK) are hidden.
+Sessions are grouped by the folder they started in; git worktrees roll up into one project. A session started in `~` follows the project folder it spent the most time in. Hover a project's name and click the T to rename it (empty goes back to the folder name). Automated runs (`claude -p`, SDK) are hidden.
 
 ## Developer checks
 

@@ -23,6 +23,7 @@ const api = {
   end: (id: string): Promise<boolean> => ipcRenderer.invoke('session:end', id),
   rename: (id: string, name: string): Promise<boolean> => ipcRenderer.invoke('session:rename', id, name),
   pin: (id: string, pinned: boolean): Promise<boolean> => ipcRenderer.invoke('session:pin', id, pinned),
+  renameProject: (id: number, name: string): Promise<boolean> => ipcRenderer.invoke('project:rename', id, name),
   star: (id: string, starred: boolean): Promise<boolean> => ipcRenderer.invoke('session:star', id, starred),
   search: (query: string): Promise<FoundView[]> => ipcRenderer.invoke('session:search', query),
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),

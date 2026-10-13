@@ -8,7 +8,7 @@ import { TRAY_1X, TRAY_2X } from './trayIcon'
 import { rememberHostedIds, reopenAfterRestart } from './reopen'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
-import { projectIdFor } from './projects'
+import { nameFor, projectIdFor } from './projects'
 import * as term from './pty'
 import { CLIENT_RE, sessionOf } from './pty'
 import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writePauseScript } from './handoff'
@@ -386,6 +386,16 @@ app.whenReady().then(() => {
   ipcMain.handle('session:search', (e, query: unknown) => {
     if (!trusted(e) || typeof query !== 'string') return []
     return searchPast(db, query.slice(0, 200), new Set(readLive().keys()))
+  })
+  // Your own name for a project; empty goes back to its folder name.
+  ipcMain.handle('project:rename', (e, id: unknown, name: unknown) => {
+    if (!trusted(e) || typeof id !== 'number' || typeof name !== 'string') return false
+    const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(id) as { root: string } | undefined
+    if (!p) return false
+    const clean = name.replace(/\s+/g, ' ').trim().slice(0, 60)
+    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(clean || nameFor(p.root), id)
+    pushState()
+    return true
   })
   ipcMain.handle('session:star', (e, id: unknown, starred: unknown) => {
     if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof starred !== 'boolean') return false

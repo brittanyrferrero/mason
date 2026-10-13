@@ -26,8 +26,23 @@ function projectKeyFor(cwd: string): { key: string; root: string } {
   return { key: cwd, root: cwd }
 }
 
-function nameFor(root: string): string {
+export function nameFor(root: string): string {
   return root === homedir() ? 'Home' : basename(root)
+}
+
+// The project for a folder you did real work in: a git repo, or any of your own folders under ~ (not ~ itself,
+// hidden folders, or the Mac's standard ones like Downloads). Used to move a session started in ~ to where it
+// actually worked. A deleted worktree folds into the known project it extends.
+const NOT_PROJECTS = new Set(['Downloads', 'Desktop', 'Documents', 'Library', 'Pictures', 'Movies', 'Music', 'Applications', 'Public'])
+export function workProjectIdFor(db: DB, cwd: string): number | null {
+  const rel = cwd.startsWith(homedir() + '/') ? cwd.slice(homedir().length + 1) : null
+  const top = rel?.split('/')[0]
+  if (!top || top.startsWith('.') || NOT_PROJECTS.has(top)) return null
+  if (!existsSync(cwd)) {
+    const parent = db.prepare(`SELECT id FROM projects WHERE ? LIKE root || '-%' ORDER BY length(root) DESC LIMIT 1`).get(cwd) as { id: number } | undefined
+    return parent?.id ?? null
+  }
+  return projectIdFor(db, cwd)
 }
 
 export function projectIdFor(db: DB, cwd: string): number {

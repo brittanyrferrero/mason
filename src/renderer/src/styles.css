@@ -321,3 +321,10 @@ html.capture, html.capture body { background: transparent !important; padding: 0
 .peek-bar .x:hover { color: #f2f2f7; background: rgba(255, 255, 255, 0.08); }
 .peek .term { flex: 1; min-height: 0; }
 @media (max-width: 700px) { .peek-hint { display: none; } }
+
+/* Renaming a project: a quiet T after the name on hover; the name edits in place. */
+.proj-rename { display: inline-flex; border: 0; background: none; color: var(--faint); padding: 4px; border-radius: 6px; opacity: 0; transition: opacity 0.12s; }
+.proj-rename svg { width: 13px; height: 13px; }
+summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
+.proj-rename:hover { color: var(--ink); background: var(--card); }
+.proj-name-edit { flex: 0 1 320px; font-size: 21px; padding: 0 6px; }

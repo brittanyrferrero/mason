@@ -25,6 +25,7 @@ export function openDb(): DB {
   const db = new Database(join(DATA_DIR, 'mason.db'))
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  const hadDirs = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_dirs'").get()
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id         INTEGER PRIMARY KEY,
@@ -90,6 +91,13 @@ export function openDb(): DB {
       body       TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    -- How much each session worked in each folder, so one started in ~ can follow the repo it actually worked in.
+    CREATE TABLE IF NOT EXISTS session_dirs (
+      session_id TEXT NOT NULL,
+      cwd        TEXT NOT NULL,
+      n          INTEGER NOT NULL,
+      PRIMARY KEY (session_id, cwd)
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -99,6 +107,8 @@ export function openDb(): DB {
   const cols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
   if (!cols.has('entrypoint')) db.exec('ALTER TABLE sessions ADD COLUMN entrypoint TEXT')
   const prefCols = new Set((db.prepare('PRAGMA table_info(session_prefs)').all() as { name: string }[]).map((c) => c.name))
+  // session_dirs is new: read every transcript once more so existing sessions get their folder counts.
+  if (!hadDirs) db.exec('DELETE FROM files')
   if (!prefCols.has('starred')) db.exec('ALTER TABLE session_prefs ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
   return db
 }

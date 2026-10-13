@@ -2,7 +2,7 @@ import { closeSync, openSync, readdirSync, readSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { DB } from './db'
-import { projectIdFor } from './projects'
+import { projectIdFor, workProjectIdFor } from './projects'
 
 export const CLAUDE_PROJECTS = join(homedir(), '.claude', 'projects')
 
@@ -17,6 +17,7 @@ type Patch = {
   pr_url?: string
   started_at?: number
   last_activity?: number
+  dirs: Map<string, number> // records per working folder in this chunk
 }
 
 // Pull plain text out of a message's content (a string or an array of blocks).
@@ -37,8 +38,11 @@ function isRealPrompt(text: string): boolean {
 
 function applyRecord(rec: any, patch: Patch): void {
   if (rec.isSidechain) return
-  // A session belongs to the folder it started in, even if Claude cd's around later.
-  if (typeof rec.cwd === 'string') patch.cwd ??= rec.cwd
+  // A session belongs to the folder it started in (but see followRepo for ones started in ~).
+  if (typeof rec.cwd === 'string') {
+    patch.cwd ??= rec.cwd
+    patch.dirs.set(rec.cwd, (patch.dirs.get(rec.cwd) ?? 0) + 1)
+  }
   if (typeof rec.entrypoint === 'string') patch.entrypoint ??= rec.entrypoint
   if (typeof rec.gitBranch === 'string' && rec.gitBranch) patch.branch = rec.gitBranch
   const ts = typeof rec.timestamp === 'string' ? Date.parse(rec.timestamp) : NaN
@@ -84,7 +88,7 @@ function ingestFile(db: DB, path: string): boolean {
   // Only consume complete lines; a half-written last line waits for the next pass.
   const end = buf.lastIndexOf(0x0a) + 1
   if (end === 0) return false
-  const patch: Patch = {}
+  const patch: Patch = { dirs: new Map() }
   for (const line of buf.subarray(0, end).toString('utf8').split('\n')) {
     if (!line) continue
     try {
@@ -131,11 +135,27 @@ function ingestFile(db: DB, path: string): boolean {
     last_activity: patch.last_activity ?? null,
     transcript: path
   })
+  const addDir = db.prepare('INSERT INTO session_dirs (session_id, cwd, n) VALUES (?, ?, ?) ON CONFLICT(session_id, cwd) DO UPDATE SET n = n + excluded.n')
+  for (const [dir, n] of patch.dirs) addDir.run(id, dir, n)
+  if (cwd === homedir()) followRepo(db, id)
   db.prepare('INSERT INTO files (path, offset) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET offset = excluded.offset').run(
     path,
     offset + end
   )
   return true
+}
+
+// Claude is often started in ~ and then cd's into a project. Such a session belongs to the project it spent the
+// most time in, rather than to "Home". Sessions started inside a project folder stay with that project.
+function followRepo(db: DB, id: string): void {
+  const dirs = db.prepare('SELECT cwd, n FROM session_dirs WHERE session_id = ?').all(id) as { cwd: string; n: number }[]
+  const score = new Map<number, number>()
+  for (const d of dirs) {
+    const pid = workProjectIdFor(db, d.cwd)
+    if (pid) score.set(pid, (score.get(pid) ?? 0) + d.n)
+  }
+  const [best, n] = [...score].sort((a, b) => b[1] - a[1])[0] ?? []
+  if (best && n >= 5) db.prepare('UPDATE sessions SET project_id = ? WHERE id = ?').run(best, id)
 }
 
 // Reads only what's new since last time. Subagent transcripts live in subfolders and are skipped.

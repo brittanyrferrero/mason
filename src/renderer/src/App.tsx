@@ -175,6 +175,7 @@ export function App() {
   const [cursor, setCursor] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [renamingProject, setRenamingProject] = useState<number | null>(null)
   const [ending, setEnding] = useState<string | null>(null) // Open-tab window asking "End this session?"
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
@@ -845,7 +846,31 @@ export function App() {
                 <details key={p.id} className="proj" open={isOpen(p.id)} onToggle={(e) => toggleProject(p.id, (e.target as HTMLDetailsElement).open)}>
                   <summary>
                     <Chevron />
-                    <span className="proj-name serif">{p.name}</span>
+                    {renamingProject === p.id ? (
+                      <ProjectName
+                        initial={p.name}
+                        onDone={(name) => {
+                          setRenamingProject(null)
+                          if (name !== null && name.trim() !== p.name) window.mason.renameProject(p.id, name)
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span className="proj-name serif">{p.name}</span>
+                        <button
+                          className="proj-rename"
+                          type="button"
+                          aria-label={`Rename ${p.name}`}
+                          title="Rename this project"
+                          onClick={(e) => {
+                            e.preventDefault() // don't fold the project
+                            setRenamingProject(p.id)
+                          }}
+                        >
+                          <RenameIcon />
+                        </button>
+                      </>
+                    )}
                     {waiting ? (
                       <span className="hint wait">
                         <span className="dot needs" />
@@ -1279,6 +1304,36 @@ function NoteEdit({ initial, label, onDone }: { initial: string; label: string; 
           finish(e.currentTarget.value)
         }
       }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+    />
+  )
+}
+
+// Renaming a project in place. It sits inside the project's <summary>, so clicks and keys mustn't fold it.
+// Enter or clicking away saves, Esc cancels; empty goes back to the folder name.
+function ProjectName({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+  const settled = useRef(false)
+  const finish = (name: string | null) => {
+    if (settled.current) return
+    settled.current = true
+    onDone(name)
+  }
+  return (
+    <input
+      className="rename proj-name-edit serif"
+      autoFocus
+      defaultValue={initial}
+      maxLength={60}
+      aria-label="Project name (leave empty to use the folder name)"
+      onFocus={(e) => e.target.select()}
+      onClick={(e) => e.preventDefault()}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === ' ') e.preventDefault(), document.execCommand('insertText', false, ' ')
+        if (e.key === 'Enter') e.preventDefault(), finish(e.currentTarget.value)
+        if (e.key === 'Escape') finish(null)
+      }}
+      onKeyUp={(e) => e.preventDefault()}
       onBlur={(e) => finish(e.currentTarget.value)}
     />
   )
