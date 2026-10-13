@@ -14,7 +14,8 @@ const RECENT_MS = 3 * 24 * 60 * 60 * 1000 // only bother with sessions touched i
 const RETRY_MS = 30 * 60 * 1000 // after a failure, leave it alone for a while
 const EXCERPT_CHARS = 12_000
 
-export type Summary = { title: string; doing: string; next: string }
+// title: the session's overall topic, which stays put; focus: the specific thing it's on right now ("Mason design · buttons").
+export type Summary = { title: string; focus: string; doing: string; next: string }
 
 export function initSummaries(db: DB): void {
   db.exec(`CREATE TABLE IF NOT EXISTS summaries (
@@ -25,6 +26,8 @@ export function initSummaries(db: DB): void {
     upto       INTEGER NOT NULL DEFAULT 0,  -- the session's last_activity when this was written
     tried_at   INTEGER NOT NULL DEFAULT 0
   )`)
+  const cols = new Set((db.prepare('PRAGMA table_info(summaries)').all() as { name: string }[]).map((c) => c.name))
+  if (!cols.has('focus')) db.exec('ALTER TABLE summaries ADD COLUMN focus TEXT')
 }
 
 export function summariesOn(db: DB): boolean {
@@ -37,8 +40,8 @@ export function setSummaries(db: DB, on: boolean): void {
 }
 
 export function readSummaries(db: DB): Map<string, Summary> {
-  const rows = db.prepare('SELECT session_id, title, doing, next FROM summaries WHERE title IS NOT NULL').all() as ({ session_id: string } & Summary)[]
-  return new Map(rows.map((r) => [r.session_id, { title: r.title, doing: r.doing, next: r.next }]))
+  const rows = db.prepare('SELECT session_id, title, focus, doing, next FROM summaries WHERE title IS NOT NULL').all() as ({ session_id: string } & Summary)[]
+  return new Map(rows.map((r) => [r.session_id, { title: r.title, focus: r.focus ?? '', doing: r.doing, next: r.next }]))
 }
 
 // Mason is often launched from the Dock with a bare PATH, so ask your login shell where `claude` lives.
@@ -90,8 +93,9 @@ function excerpt(path: string): string {
 
 const PROMPT = `You write tiny status notes for someone with ADHD who juggles many Claude Code sessions and needs to remember where each one was.
 Read the conversation excerpt and reply with ONLY a JSON object, no code fence:
-{"title": "...", "doing": "...", "next": "..."}
-- title: 2-5 words naming what this session is about (e.g. "Room booking cancel flow"). No quotes, no trailing period.
+{"title": "...", "focus": "...", "doing": "...", "next": "..."}
+- title: 2-5 words naming the overall topic of the whole session (e.g. "Mason design", "Room booking cancel flow"). It should stay steady: if a previous title is given and still fits the session as a whole, repeat it exactly. No quotes, no trailing period.
+- focus: 1-3 words, lowercase unless a proper noun: the specific part being worked on right now within that topic (e.g. "buttons", "cancel email"). Empty string if it would just repeat the title.
 - doing: one short sentence, what was being worked on most recently, in plain words.
 - next: one short sentence, the very next step. If Claude ended by asking something, start with "Waiting on you: ". If the work is finished and nothing is left, write exactly "Done for now". Under 15 words.`
 
@@ -107,7 +111,7 @@ function ask(bin: string, input: string): Promise<Summary | null> {
           const raw = String(JSON.parse(stdout).result ?? '')
           const s = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
           const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '')
-          const out = { title: clean(s.title, 60), doing: clean(s.doing, 200), next: clean(s.next, 200) }
+          const out = { title: clean(s.title, 60), focus: clean(s.focus, 40), doing: clean(s.doing, 200), next: clean(s.next, 200) }
           resolve(out.title ? out : null)
         } catch {
           resolve(null)
@@ -130,19 +134,21 @@ export async function summarizeDue(db: DB, busy: Set<string>, onDone: () => void
     const now = Date.now()
     const due = db
       .prepare(
-        `SELECT s.id, s.transcript, s.last_activity FROM sessions s LEFT JOIN summaries m ON m.session_id = s.id
+        `SELECT s.id, s.transcript, s.last_activity, m.title AS prev FROM sessions s LEFT JOIN summaries m ON m.session_id = s.id
          WHERE s.last_activity > ? AND s.last_activity < ? AND COALESCE(s.entrypoint, 'cli') NOT LIKE 'sdk%'
            AND s.last_activity > COALESCE(m.upto, 0) AND COALESCE(m.tried_at, 0) < ?
          ORDER BY s.last_activity DESC LIMIT 5`
       )
-      .all(now - RECENT_MS, now - QUIET_MS, now - RETRY_MS) as { id: string; transcript: string; last_activity: number }[]
+      .all(now - RECENT_MS, now - QUIET_MS, now - RETRY_MS) as { id: string; transcript: string; last_activity: number; prev: string | null }[]
     for (const r of due) {
       if (!summariesOn(db)) break
       if (busy.has(r.id) || !existsSync(r.transcript)) continue
       db.prepare('INSERT INTO summaries (session_id, tried_at) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET tried_at = excluded.tried_at').run(r.id, Date.now())
-      const s = await ask(bin, excerpt(r.transcript))
+      // The previous title keeps the overall topic steady; only the focus should follow the conversation around.
+      const s = await ask(bin, (r.prev ? `Previous title: ${r.prev}\n\n` : '') + excerpt(r.transcript))
       if (!s) continue
-      db.prepare('UPDATE summaries SET title = ?, doing = ?, next = ?, upto = ? WHERE session_id = ?').run(s.title, s.doing, s.next, r.last_activity, r.id)
+      const focus = s.focus.toLowerCase() === s.title.toLowerCase() ? '' : s.focus
+      db.prepare('UPDATE summaries SET title = ?, focus = ?, doing = ?, next = ?, upto = ? WHERE session_id = ?').run(s.title, focus, s.doing, s.next, r.last_activity, r.id)
       onDone()
     }
   } finally {

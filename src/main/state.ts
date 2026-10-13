@@ -20,6 +20,7 @@ export type SessionView = {
   host: string | null // tmux session name when it lives inside Mason; null when it's in a Terminal window
   pinned: boolean
   starred: boolean
+  focus?: string // from the summary: what it's on right now, shown after the title ("Mason design · buttons")
   next?: string // from the summary: the very next step
   myNote?: string
 }
@@ -189,6 +190,7 @@ export function buildState(
       add(r.project_id, r.project, {
         id: `tmux:${h}`,
         title: title(r),
+        focus: sums.get(r.id)?.focus || undefined,
         now: 'Another copy of this conversation. End the ones you don’t need.',
         status: c.status,
         branch: null,
@@ -203,6 +205,7 @@ export function buildState(
     add(r.project_id, r.project, {
       id: r.id,
       title: title(r),
+      focus: sums.get(r.id)?.focus || undefined,
       // While Claude works, its latest words are the freshest news; once it stops, the recap says where you were.
       now:
         l.copies > 1

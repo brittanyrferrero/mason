@@ -204,6 +204,7 @@ export function App() {
   const [rowNote, setRowNote] = useState<{ id: string; note: Note } | null>(null)
   const [note, setNote] = useState<Note | null>(null)
   // Peek: a session enlarged over the list, live, so you can answer it without leaving Projects.
+  const [renamingHost, setRenamingHost] = useState<string | null>(null)
   const [updateOpen, setUpdateOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [peeking, setPeeking] = useState<{ host: string; id: string } | null>(null)
@@ -467,12 +468,13 @@ export function App() {
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
     const pending = openHosts
       .filter((h) => !known.some(({ s }) => s.host === h))
-      .map((h) => ({ host: h, project: '', title: 'Starting…', needs: false, working: true, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
+      .map((h) => ({ host: h, project: '', title: 'Starting…', focus: undefined as string | undefined, needs: false, working: true, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
     const list = [
       ...known.map(({ s, project }) => ({
         host: s.host!,
         project,
         title: s.title,
+        focus: s.focus,
         needs: s.status === 'needs',
         working: s.status === 'working',
         last: s.lastActivity,
@@ -912,7 +914,7 @@ export function App() {
               >
                 <div
                   className="win-bar"
-                  draggable={!one && n > 1}
+                  draggable={!one && n > 1 && renamingHost !== w.host}
                   title={one || n < 2 ? undefined : 'Drag to rearrange · double-click for one at a time'}
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = 'move'
@@ -927,10 +929,34 @@ export function App() {
                   onDoubleClick={(e) => n > 1 && !(e.target as Element).closest('button') && toggleOne(w.host)}
                 >
                   {w.needs && <span className="dot needs" title="Waiting on you" />}
-                  <b>
-                    {w.project && !grouped && !only && <span className="wp">{w.project}</span>}
-                    {w.title}
-                  </b>
+                  {renamingHost === w.host && w.sid ? (
+                    <input
+                      className="win-rename"
+                      autoFocus
+                      defaultValue={w.title}
+                      maxLength={80}
+                      aria-label="Window name (leave empty to use Claude’s title)"
+                      onFocus={(e) => e.target.select()}
+                      onKeyDown={(e) => {
+                        e.stopPropagation()
+                        if (e.key === 'Enter') e.currentTarget.blur()
+                        if (e.key === 'Escape') {
+                          e.currentTarget.value = w.title // so the blur that follows doesn't save
+                          e.currentTarget.blur()
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (renamingHost === w.host && e.currentTarget.value.trim() !== w.title) window.mason.rename(w.sid!, e.currentTarget.value)
+                        setRenamingHost(null)
+                      }}
+                    />
+                  ) : (
+                    <b onDoubleClick={(e) => w.sid && (e.stopPropagation(), setRenamingHost(w.host))} title={w.sid ? 'Double-click to rename' : undefined}>
+                      {w.project && !grouped && !only && <span className="wp">{w.project}</span>}
+                      {w.title}
+                      {w.focus && <span className="wf"> · {w.focus}</span>}
+                    </b>
+                  )}
                   {ending === w.host ? (
                     <>
                       <span className="ask">End this session?</span>
@@ -963,6 +989,11 @@ export function App() {
                           onClick={() => toggleSpotlight(w.host)}
                         >
                           <FocusIcon />
+                        </button>
+                      )}
+                      {w.sid && (
+                        <button className="x" type="button" aria-label="Rename this session" title="Rename (or double-click the title)" onClick={() => setRenamingHost(w.host)}>
+                          <RenameIcon />
                         </button>
                       )}
                       <button className="x note-x" type="button" aria-label="Spin off a side thought into a new session here" title="Spin off a side thought: a new session in this folder (⌘⇧N)" onClick={() => setSpinning(w.host)}>
@@ -1475,7 +1506,10 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
           <button className="main-btn" type="button" onClick={onOpen} title={inTerminal ? 'Bring its Terminal window to the front' : 'Open'}>
             <span className="title">
               <span className={`dot ${s.status}`} />
-              <span className="title-text">{s.title}</span>
+              <span className="title-text">
+                {s.title}
+                {s.focus && <span className="title-focus"> · {s.focus}</span>}
+              </span>
               {s.starred && (
                 <span className="starred" title="Starred">
                   <StarIcon filled />
