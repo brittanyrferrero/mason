@@ -136,7 +136,8 @@ export async function summarizeDue(db: DB, busy: Set<string>, onDone: () => void
       .prepare(
         `SELECT s.id, s.transcript, s.last_activity, m.title AS prev FROM sessions s LEFT JOIN summaries m ON m.session_id = s.id
          WHERE s.last_activity > ? AND s.last_activity < ? AND COALESCE(s.entrypoint, 'cli') NOT LIKE 'sdk%'
-           AND s.last_activity > COALESCE(m.upto, 0) AND COALESCE(m.tried_at, 0) < ?
+           -- new activity since the last summary, or a summary from before "focus" existed (focus is NULL until rewritten)
+           AND (s.last_activity > COALESCE(m.upto, 0) OR (m.title IS NOT NULL AND m.focus IS NULL)) AND COALESCE(m.tried_at, 0) < ?
          ORDER BY s.last_activity DESC LIMIT 5`
       )
       .all(now - RECENT_MS, now - QUIET_MS, now - RETRY_MS) as { id: string; transcript: string; last_activity: number; prev: string | null }[]
