@@ -931,11 +931,6 @@ export function App() {
                   onDoubleClick={(e) => n > 1 && !(e.target as Element).closest('button') && toggleOne(w.host)}
                 >
                   {w.needs && <span className="dot needs" title="Waiting on you" />}
-                  {footers[w.host]?.mode && (
-                    <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
-                      {footers[w.host]!.mode}
-                    </span>
-                  )}
                   {renamingHost === w.host && w.sid ? (
                     <input
                       className="win-rename"
@@ -963,6 +958,11 @@ export function App() {
                       {w.title}
                       {w.focus && <span className="wf"> · {w.focus}</span>}
                     </b>
+                  )}
+                  {footers[w.host]?.mode && (
+                    <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
+                      {footers[w.host]!.mode}
+                    </span>
                   )}
                   {ending === w.host ? (
                     <>
