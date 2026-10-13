@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import type { DB } from './db'
 import type { Need } from './events'
 import type { LiveInfo } from './live'
@@ -10,6 +11,7 @@ export type SessionStatus = 'working' | 'needs' | 'idle'
 export type SessionView = {
   id: string // Claude session id, or "tmux:<name>" for a Mason shell where Claude isn't running (yet)
   sid?: string // for a "tmux:" row: the conversation it holds, so star, pin, name, and notes still apply
+  term?: boolean // a plain terminal, not Claude
   title: string
   now: string
   status: SessionStatus
@@ -35,7 +37,7 @@ export type PausedView = {
 }
 
 export type AppState = {
-  projects: { id: number; name: string; sessions: SessionView[]; myNote?: string }[]
+  projects: { id: number; name: string; sessions: SessionView[]; myNote?: string; kept?: boolean }[]
   paused: PausedView[]
   // Things you parked: /stash in Claude, or quick capture (⌃⌥N). Newest first.
   saved: { id: number; kind: 'message' | 'idea' | 'later'; body: string; from: string | null; at: number }[]
@@ -227,6 +229,24 @@ export function buildState(
   // Mason shells where Claude isn't running: still starting, stuck on its first question, or exited.
   for (const h of hosted) {
     if (claimed.has(h.name)) continue
+    if (h.term) {
+      // A plain terminal: titled by what's running in it, or "Terminal" when it's just sitting at a prompt.
+      const p = (h.project && (db.prepare('SELECT id, name FROM projects WHERE id = ?').get(h.project) as { id: number; name: string } | undefined)) || projectFor(h.cwd)
+      const atPrompt = !h.cmd || /^-?(zsh|bash|fish|sh|tcsh|login)$/.test(h.cmd)
+      add(p.id, p.name, {
+        id: `tmux:${h.name}`,
+        title: atPrompt ? 'Terminal' : h.cmd,
+        now: h.cwd.startsWith(homedir()) ? '~' + h.cwd.slice(homedir().length) : h.cwd,
+        status: 'idle',
+        branch: null,
+        lastActivity: h.created,
+        host: h.name,
+        term: true,
+        pinned: false,
+        starred: false
+      })
+      continue
+    }
     const p = projectFor(h.cwd)
     const r = h.resume ? (db.prepare('SELECT id, ai_title, first_prompt FROM sessions WHERE id = ?').get(h.resume) as Pick<Row, 'id' | 'ai_title' | 'first_prompt'> | undefined) : undefined
     const seen = peek(h.name)
@@ -266,6 +286,11 @@ export function buildState(
   const projects = [...byProject.values()]
   const rank = (s: SessionView) => (s.pinned ? 2 : 0) + (s.status === 'needs' ? 1 : 0)
   for (const p of projects) p.sessions.sort((a, b) => rank(b) - rank(a))
+  // Projects you added stay listed even with nothing running, so you can start something there.
+  const kept = db.prepare('SELECT id, name FROM projects WHERE kept = 1').all() as { id: number; name: string }[]
+  for (const k of kept) if (!byProject.has(k.id)) projects.push({ id: k.id, name: k.name, sessions: [] })
+  const keptIds = new Set(kept.map((k) => k.id))
+  for (const p of projects) p.kept = keptIds.has(p.id) || undefined
   for (const p of projects) p.myNote = myNotes.get(`p:${p.id}`)
   return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), scratch: myNotes.get('scratch') ?? '' }
 }

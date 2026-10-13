@@ -16,6 +16,10 @@ const api = {
 
   open: (id: string): Promise<HostResult> => ipcRenderer.invoke('session:open', id),
   newSession: (projectId: number): Promise<HostResult> => ipcRenderer.invoke('session:new', projectId),
+  newTerminal: (projectId: number): Promise<HostResult> => ipcRenderer.invoke('terminal:new', projectId),
+  terminalHere: (name: string): Promise<HostResult> => ipcRenderer.invoke('terminal:here', name),
+  addProject: (): Promise<{ projectId?: number; error?: string }> => ipcRenderer.invoke('project:add'),
+  forgetProject: (id: number): Promise<boolean> => ipcRenderer.invoke('project:forget', id),
   resume: (id: string): Promise<HostResult> => ipcRenderer.invoke('session:resume', id),
   fresh: (id: string): Promise<HostResult> => ipcRenderer.invoke('session:fresh', id),
   editHandoff: (id: string, brief: string): Promise<boolean> => ipcRenderer.invoke('handoff:edit', id, brief),

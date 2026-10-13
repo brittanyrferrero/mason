@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
-const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyF'])
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF'])
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.

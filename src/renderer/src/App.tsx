@@ -129,6 +129,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Change order', ['⌘', 'O']],
       ['Next project', ['⌘', 'P']],
       ['Note on this session', ['⌘', 'N']],
+      ['New terminal here', ['⌘', 'T']],
       ['Hide window', ['⌘', '⇧', 'W']],
       ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
@@ -383,6 +384,11 @@ export function App() {
   }
   const handle = (r: { host?: string; error?: string }) => (r.host ? showHosts([r.host]) : r.error && flashNote({ text: r.error, tone: 'muted' }))
   const newSession = async (projectId: number) => handle(await window.mason.newSession(projectId))
+  const newTerminal = async (projectId: number) => handle(await window.mason.newTerminal(projectId))
+  const addProject = async () => {
+    const r = await window.mason.addProject()
+    if (r.error) flashNote({ text: r.error, tone: 'muted' })
+  }
   const resume = async (id: string) => handle(await window.mason.resume(id))
   const fresh = async (id: string) => handle(await window.mason.fresh(id))
   const [editingHandoff, setEditingHandoff] = useState<string | null>(null)
@@ -573,6 +579,10 @@ export function App() {
           return showProject(all[(all.indexOf(only) + 1) % all.length])
         }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
+        if (c === 'KeyT' && !e.shiftKey && focusHost) {
+          e.preventDefault()
+          return void window.mason.terminalHere(focusHost).then(handle)
+        }
         if (c === 'KeyN' && !e.shiftKey) {
           e.preventDefault()
           const sid = windows.find((w) => w.host === focusHost)?.sid
@@ -917,7 +927,7 @@ export function App() {
         ) : q && !projects.length ? (
           !found.length && <p className="empty">Nothing matches “{q}”.</p>
         ) : state.projects.length === 0 ? (
-          <p className="empty">No Claude sessions are running right now. Resume one from paused below.</p>
+          <p className="empty">Nothing is running right now. Resume a session from paused below, or add a project.</p>
         ) : (
           <div>
             {projects.map((p) => {
@@ -961,7 +971,7 @@ export function App() {
                     ) : (
                       <span className="hint">
                         <span className={`dot ${moving ? 'working' : ''}`} />
-                        {p.sessions.length} session{p.sessions.length > 1 ? 's' : ''}
+                        {p.sessions.length ? `${p.sessions.length} session${p.sessions.length > 1 ? 's' : ''}` : 'nothing running'}
                       </span>
                     )}
                   </summary>
@@ -969,6 +979,16 @@ export function App() {
                     {state.canHost && (
                       <button className="link" type="button" onClick={() => newSession(p.id)}>
                         + New session
+                      </button>
+                    )}
+                    {state.canHost && (
+                      <button className="link" type="button" onClick={() => newTerminal(p.id)} title="A plain terminal in this project’s folder, kept inside Mason">
+                        + New terminal
+                      </button>
+                    )}
+                    {p.kept && !p.sessions.length && (
+                      <button className="link" type="button" onClick={() => window.mason.forgetProject(p.id)} title="Take it off the list (the folder isn’t touched)">
+                        Remove
                       </button>
                     )}
                     {state.canHost && inMason.length > 1 && (
@@ -1022,6 +1042,11 @@ export function App() {
               )
             })}
           </div>
+        )}
+        {state?.canHost && !q && (
+          <button className="link new-project" type="button" onClick={addProject} title="Pick or create a folder to work in">
+            + New project
+          </button>
         )}
 
         {q && found.length > 0 && (
@@ -1242,7 +1267,9 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
     settled.current = true
     onRenamed(name)
   }
-  const endHint = s.id.startsWith('tmux:')
+  const endHint = s.term
+    ? 'Close this terminal. Anything still running in it stops.'
+    : s.id.startsWith('tmux:')
     ? 'Close this Mason shell (Claude isn’t running in it)'
     : inTerminal
       ? 'Stop Claude in its Terminal window. The window stays open, and the conversation goes to paused so you can resume it.'
@@ -1288,6 +1315,7 @@ function Row({ s, cursor, note, confirming, renaming, canHost, onRename, onRenam
               )}
               {s.status === 'needs' && <span className="tag">waiting</span>}
               {inTerminal && <span className="where">in Terminal</span>}
+              {s.term && <span className="where">terminal</span>}
             </span>
             {note ? <span className={`toast ${note.tone}`}>{note.text}</span> : s.now && <span className="now">{s.now}</span>}
             {!note && s.next && <span className="now next">Next: {s.next}</span>}

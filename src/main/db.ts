@@ -110,5 +110,8 @@ export function openDb(): DB {
   // session_dirs is new: read every transcript once more so existing sessions get their folder counts.
   if (!hadDirs) db.exec('DELETE FROM files')
   if (!prefCols.has('starred')) db.exec('ALTER TABLE session_prefs ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
+  // Projects you added yourself stay in the list even with nothing running in them.
+  const projCols = new Set((db.prepare('PRAGMA table_info(projects)').all() as { name: string }[]).map((c) => c.name))
+  if (!projCols.has('kept')) db.exec('ALTER TABLE projects ADD COLUMN kept INTEGER NOT NULL DEFAULT 0')
   return db
 }

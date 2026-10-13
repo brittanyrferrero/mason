@@ -58,22 +58,36 @@ export function initTmux(): void {
 }
 
 // resume: the conversation Mason started this shell for, so it can be named before Claude is up (or after it exits).
-export type Hosted = { name: string; tty: string; cwd: string; created: number; resume?: string }
+export type Hosted = {
+  name: string
+  tty: string
+  cwd: string
+  created: number
+  resume?: string
+  term?: boolean // a plain terminal: no Claude was started in it
+  project?: number // the project a plain terminal was opened for
+  cmd: string // what's running in it right now (e.g. zsh, npm, ssh)
+}
 
 export function listHosted(): Hosted[] {
   if (!TMUX) return []
   try {
     // Space-separated, path last: tmux can rewrite tabs in its output, and only the path can contain spaces.
-    return tmux(['list-panes', '-a', '-F', '#{session_name} #{pane_tty} #{session_created} r#{@mason_resume} #{pane_current_path}'])
+    // The command name has its spaces swapped out by tmux itself, so every field but the path stays one word.
+    const format = '#{session_name} #{pane_tty} #{session_created} r#{@mason_resume} k#{@mason_kind} p#{@mason_project} c#{s/ /_/:pane_current_command} #{pane_current_path}'
+    return tmux(['list-panes', '-a', '-F', format])
       .split('\n')
-      .map((l) => l.match(/^(\S+) (\S+) (\d+) r(\S*) (.*)$/))
+      .map((l) => l.match(/^(\S+) (\S+) (\d+) r(\S*) k(\S*) p(\d*) c(\S*) (.*)$/))
       .filter((m): m is RegExpMatchArray => !!m && NAME_RE.test(m[1]))
-      .map(([, name, tty, created, resume, cwd]) => ({
+      .map(([, name, tty, created, resume, kind, project, cmd, cwd]) => ({
         name,
         tty: tty.replace('/dev/', ''),
         cwd,
         created: Number(created) * 1000,
-        resume: SESSION_ID_RE.test(resume) ? resume : undefined
+        resume: SESSION_ID_RE.test(resume) ? resume : undefined,
+        term: kind === 'term' || undefined,
+        project: project ? Number(project) : undefined,
+        cmd: cmd.replace(/_/g, ' ')
       }))
   } catch {
     return [] // no server running yet
@@ -82,6 +96,16 @@ export function listHosted(): Hosted[] {
 
 // Starts your normal login shell in the folder (so your PATH, nvm, etc. all work), then types `claude` into it.
 // If Claude exits, the shell stays, just like a Terminal tab.
+// A plain terminal: your login shell in the folder, nothing typed into it. Remembers which project it was opened
+// for, so it stays under that project even if you cd somewhere else.
+export function startTerminal(cwd: string, projectId: number): string {
+  const name = `ms-${randomBytes(4).toString('hex')}`
+  tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '120', '-y', '36'])
+  tmux(['set-option', '-t', name, '@mason_kind', 'term'])
+  tmux(['set-option', '-t', name, '@mason_project', String(projectId)])
+  return name
+}
+
 export function startSession(cwd: string, resumeId?: string, briefPath?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
   const name = `ms-${randomBytes(4).toString('hex')}`

@@ -328,3 +328,6 @@ html.capture, html.capture body { background: transparent !important; padding: 0
 summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .proj-rename:hover { color: var(--ink); background: var(--card); }
 .proj-name-edit { flex: 0 1 320px; font-size: 21px; padding: 0 6px; }
+
+/* Add a project: a quiet link at the end of the list. */
+.new-project { justify-self: start; margin: 4px 0 0 4px; }

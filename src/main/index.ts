@@ -1,11 +1,12 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, watch, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DATA_DIR, openDb, type DB } from './db'
 import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript } from './events'
 import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { TRAY_1X, TRAY_2X } from './trayIcon'
-import { rememberHostedIds, reopenAfterRestart } from './reopen'
+import { rememberHostedIds, rememberTerminals, reopenAfterRestart } from './reopen'
 import { CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { nameFor, projectIdFor } from './projects'
@@ -15,7 +16,7 @@ import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writeP
 import { buildState, searchPast } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
-import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, TMUX, unscroll } from './tmux'
+import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, startTerminal, TMUX, unscroll } from './tmux'
 
 let db: DB
 let win: BrowserWindow | null = null
@@ -115,6 +116,7 @@ function createTray(): void {
 // ---- After a Mac restart, tmux is gone; reopen the sessions that were running in Mason (see reopen.ts) ----
 function rememberHosted(s: ReturnType<typeof state>): void {
   rememberHostedIds(db, s.projects.flatMap((p) => p.sessions.filter((x) => x.host && !x.id.startsWith('tmux:')).map((x) => x.id)))
+  rememberTerminals(db, listHosted().flatMap((h) => (h.term && h.project ? [{ cwd: h.cwd, project: h.project }] : [])))
 }
 
 const waitForExit = async (pid: number, ms: number) => {
@@ -310,6 +312,43 @@ app.whenReady().then(() => {
   })
 
   // New Claude session in a project's folder, hosted inside Mason.
+  // A plain terminal in a project's folder, hosted inside Mason like a Claude session.
+  ipcMain.handle('terminal:new', (e, projectId: unknown) => {
+    if (!trusted(e) || typeof projectId !== 'number') return { error: 'bad request' }
+    const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(projectId) as { root: string } | undefined
+    if (!p || !existsSync(p.root)) return { error: 'That project folder no longer exists.' }
+    const host = startTerminal(p.root, projectId)
+    refreshSoon(false)
+    return { host }
+  })
+  // ⌘T in the Open tab: a terminal in the same folder (and project) as the window you're in.
+  ipcMain.handle('terminal:here', (e, name: unknown) => {
+    if (!trusted(e) || typeof name !== 'string' || !NAME_RE.test(name)) return { error: 'bad request' }
+    const h = listHosted().find((x) => x.name === name)
+    if (!h || !existsSync(h.cwd)) return { error: 'Couldn’t find that window’s folder.' }
+    const host = startTerminal(h.cwd, h.project ?? projectFor(h.cwd).id)
+    refreshSoon(false)
+    return { host }
+  })
+
+  // New project: pick (or create) a folder; it stays in the list even before anything runs there.
+  ipcMain.handle('project:add', async (e) => {
+    if (!trusted(e) || !win) return { error: 'bad request' }
+    const r = await dialog.showOpenDialog(win, { title: 'New project', buttonLabel: 'Add project', defaultPath: homedir(), properties: ['openDirectory', 'createDirectory'] })
+    const dir = r.filePaths[0]
+    if (r.canceled || !dir) return {}
+    const id = projectIdFor(db, dir)
+    db.prepare('UPDATE projects SET kept = 1 WHERE id = ?').run(id)
+    pushState()
+    return { projectId: id }
+  })
+  ipcMain.handle('project:forget', (e, id: unknown) => {
+    if (!trusted(e) || typeof id !== 'number') return false
+    db.prepare('UPDATE projects SET kept = 0 WHERE id = ?').run(id)
+    pushState()
+    return true
+  })
+
   ipcMain.handle('session:new', (e, projectId: unknown) => {
     if (!trusted(e) || typeof projectId !== 'number') return { error: 'bad request' }
     const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(projectId) as { root: string } | undefined
