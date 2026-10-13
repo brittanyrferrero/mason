@@ -9,6 +9,7 @@ export type SessionStatus = 'working' | 'needs' | 'idle'
 
 export type SessionView = {
   id: string // Claude session id, or "tmux:<name>" for a Mason shell where Claude isn't running (yet)
+  sid?: string // for a "tmux:" row: the conversation it holds, so star, pin, name, and notes still apply
   title: string
   now: string
   status: SessionStatus
@@ -189,8 +190,10 @@ export function buildState(
         branch: null,
         lastActivity: r.last_activity ?? 0,
         host: h,
-        pinned: false,
-        starred: false
+        sid: r.id,
+        myNote: myNote(r.id),
+        pinned: pinned(r.id),
+        starred: starred(r.id)
       })
     }
     add(r.project_id, r.project, {
@@ -235,8 +238,10 @@ export function buildState(
       branch: null,
       lastActivity: h.created,
       host: h.name,
-      pinned: false,
-        starred: false
+      sid: r?.id,
+      myNote: r ? myNote(r.id) : undefined,
+      pinned: r ? pinned(r.id) : false,
+      starred: r ? starred(r.id) : false
     })
   }
 

@@ -372,7 +372,7 @@ export function App() {
         title: s.title,
         needs: s.status === 'needs',
         last: s.lastActivity,
-        sid: s.id.startsWith('tmux:') ? null : s.id, // notes need the real conversation id
+        sid: s.sid ?? (s.id.startsWith('tmux:') ? null : s.id), // notes belong to the conversation, whichever copy this is
         myNote: s.myNote
       })),
       ...pending
@@ -464,14 +464,16 @@ export function App() {
     setLayout((l) => (l === 'one' ? lastMulti.current : 'one'))
   }
 
-  // Rename and pin need a real Claude session id (not a bare Mason shell).
-  const hasPrefs = (s: SessionView) => !s.id.startsWith('tmux:')
+  // Name, pin, star, and notes belong to the conversation. A Mason shell row carries the conversation it holds
+  // (another copy, or one still starting); a bare shell with no conversation has none.
+  const prefId = (s: SessionView) => s.sid ?? (s.id.startsWith('tmux:') ? null : s.id)
+  const hasPrefs = (s: SessionView) => !!prefId(s)
   const rename = (s: SessionView, name: string) => {
     setRenaming(null)
-    if (name.trim() !== s.title) window.mason.rename(s.id, name)
+    if (name.trim() !== s.title && prefId(s)) window.mason.rename(prefId(s)!, name)
   }
-  const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(s.id, !s.pinned)
-  const star = (s: SessionView) => hasPrefs(s) && window.mason.star(s.id, !s.starred)
+  const pin = (s: SessionView) => hasPrefs(s) && window.mason.pin(prefId(s)!, !s.pinned)
+  const star = (s: SessionView) => hasPrefs(s) && window.mason.star(prefId(s)!, !s.starred)
   // The pen: brings back a tucked note, otherwise starts writing (or editing) one.
   const openNote = (key: string) => (tucked.has(key) ? tuck(key, false) : setNoting(key))
   const saveNote = (target: string, body: string | null) => {
@@ -536,7 +538,7 @@ export function App() {
       if (k === 'p' && sel) return pin(sel)
       if (e.key === '*' && sel) return star(sel)
       if (e.key === ' ' && sel?.host) return e.preventDefault(), setPeeking({ host: sel.host, id: sel.id })
-      if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), openNote(`s:${sel.id}`)
+      if (k === 'n' && sel && hasPrefs(sel)) return e.preventDefault(), openNote(`s:${prefId(sel)}`)
       if (e.key === 'Enter' && sel && !(e.target as Element).closest?.('button, summary')) return e.preventDefault(), open(sel)
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || k === 'j' || k === 'k') {
         e.preventDefault()
@@ -935,12 +937,12 @@ export function App() {
                         onPin={hasPrefs(s) ? () => pin(s) : undefined}
                         onStar={hasPrefs(s) ? () => star(s) : undefined}
                         onPeek={s.host ? () => setPeeking({ host: s.host!, id: s.id }) : undefined}
-                        noting={noting === `s:${s.id}`}
-                        tucked={tucked.has(`s:${s.id}`)}
-                        onTuck={(on) => tuck(`s:${s.id}`, on)}
-                        onEditNote={() => setNoting(`s:${s.id}`)}
-                        onNote={hasPrefs(s) ? () => openNote(`s:${s.id}`) : undefined}
-                        onNoted={(body) => saveNote(`s:${s.id}`, body)}
+                        noting={noting === `s:${prefId(s)}`}
+                        tucked={tucked.has(`s:${prefId(s)}`)}
+                        onTuck={(on) => tuck(`s:${prefId(s)}`, on)}
+                        onEditNote={() => setNoting(`s:${prefId(s)}`)}
+                        onNote={hasPrefs(s) ? () => openNote(`s:${prefId(s)}`) : undefined}
+                        onNoted={(body) => saveNote(`s:${prefId(s)}`, body)}
                         onOpen={() => open(s)}
                         onMove={() => move(s.id)}
                         onEnd={() => setConfirming(s.id)}
