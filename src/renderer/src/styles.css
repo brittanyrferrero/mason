@@ -331,3 +331,8 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 
 /* Add a project: a quiet link at the end of the list. */
 .new-project { justify-self: start; margin: 4px 0 0 4px; }
+
+/* Spin-off: a one-line "side thought" box under a window's title bar. */
+.spin-box { flex: none; border: 0; border-bottom: 1px solid #3a3a3e; background: #232325; color: #f2f2f7; font: inherit; font-size: 12.5px; padding: 7px 12px; outline: none; user-select: text; }
+.spin-box::placeholder { color: #8e8e93; }
+.mini.saved[draggable='true'] { cursor: grab; }

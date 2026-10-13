@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
-const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF'])
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF', 'KeyJ'])
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
@@ -80,7 +80,17 @@ export function Term({ name, focus, tick, peek = false }: { name: string; focus:
 
   // Dropping files types their paths, like Terminal does, so Claude can pick up a dragged-in screenshot.
   const onDrop = (e: DragEvent) => {
-    if (!e.dataTransfer.files.length) return
+    if (e.dataTransfer.types.includes('application/x-mason-window')) return // rearranging windows, not text
+    // Dropped text (a note, a saved idea, a snippet from another app) lands in the prompt as a paste: it's never
+    // sent on its own, and control characters are stripped so nothing in it can act like a keypress.
+    if (!e.dataTransfer.files.length) {
+      const text = e.dataTransfer.getData('text/plain').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+      if (!text) return
+      e.preventDefault()
+      termRef.current?.paste(text)
+      termRef.current?.focus()
+      return
+    }
     e.preventDefault()
     // A newline (or any control character) in a file name would act like pressing Enter at a shell prompt and run
     // whatever follows, so such names are skipped rather than typed.
@@ -95,7 +105,11 @@ export function Term({ name, focus, tick, peek = false }: { name: string; focus:
       className="term"
       ref={el}
       onMouseDown={() => termRef.current?.focus()}
-      onDragOver={(e) => e.dataTransfer.types.includes('Files') && (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))}
+      onDragOver={(e) =>
+        !e.dataTransfer.types.includes('application/x-mason-window') &&
+        (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) &&
+        (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))
+      }
       onDrop={onDrop}
     />
   )

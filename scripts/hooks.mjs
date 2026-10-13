@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Adds (or removes) Mason's hooks in ~/.claude/settings.json, and its /pause and /stash commands in ~/.claude/commands.
+// Adds (or removes) Mason's hooks in ~/.claude/settings.json, and its /pause, /stash, and /spinoff commands in ~/.claude/commands.
 //   node scripts/hooks.mjs install
 //   node scripts/hooks.mjs uninstall
 // Always backs the file up to ~/.mason/backups first, and only ever touches entries that run ~/.mason/hook.sh.
@@ -53,9 +53,9 @@ if (action !== 'install' && action !== 'uninstall') {
   process.exit(1)
 }
 
-// /pause and /stash: Mason writes the command text to ~/.mason when it starts; this copies it into place.
+// /pause, /stash, and /spinoff: Mason writes the command text to ~/.mason when it starts; this copies it into place.
 // Never overwrites a command file that Mason didn't write.
-for (const name of ['pause', 'stash']) {
+for (const name of ['pause', 'stash', 'spinoff']) {
   const src = join(homedir(), '.mason', `${name}-command.md`)
   const dst = join(homedir(), '.claude', 'commands', `${name}.md`)
   const ours = !existsSync(dst) || readFileSync(dst, 'utf8').includes('Written by Mason')

@@ -45,6 +45,7 @@ export type AppState = {
   doneToday: { id: string; title: string; project: string; what: string }[]
   canHost: boolean
   summaries: boolean
+  notify: boolean // a Mac notification when a session starts waiting while Mason is in the background
   scratch: string
 }
 
@@ -292,5 +293,6 @@ export function buildState(
   const keptIds = new Set(kept.map((k) => k.id))
   for (const p of projects) p.kept = keptIds.has(p.id) || undefined
   for (const p of projects) p.myNote = myNotes.get(`p:${p.id}`)
-  return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), scratch: myNotes.get('scratch') ?? '' }
+  const notify = (db.prepare("SELECT value FROM settings WHERE key = 'notify'").get() as { value: string } | undefined)?.value !== 'off'
+  return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), notify, scratch: myNotes.get('scratch') ?? '' }
 }

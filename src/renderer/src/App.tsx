@@ -83,6 +83,14 @@ const FocusIcon = () => (
     <circle cx="12" cy="12" r="3.5" />
   </svg>
 )
+const BranchIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="6" cy="5" r="2" />
+    <circle cx="6" cy="19" r="2" />
+    <circle cx="18" cy="8" r="2" />
+    <path d="M6 7v10M18 10c0 4-6 3-11.3 7.5" />
+  </svg>
+)
 const SearchIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="7" />
@@ -95,6 +103,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
     'Anywhere',
     [
       ['Projects tab', ['⌘', '1']],
+      ['Next waiting session', ['⌘', 'J']],
       ['Open tab', ['⌘', '2']]
     ]
   ],
@@ -130,6 +139,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Next project', ['⌘', 'P']],
       ['Note on this session', ['⌘', 'N']],
       ['New terminal here', ['⌘', 'T']],
+      ['Spin off a side thought', ['⌘', '⇧', 'N']],
       ['Hide window', ['⌘', '⇧', 'W']],
       ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
@@ -214,6 +224,7 @@ export function App() {
       return []
     }
   })
+  const [spinning, setSpinning] = useState<string | null>(null) // window whose "side thought" box is open
   const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<{ host: string; after: boolean } | null>(null)
@@ -338,9 +349,20 @@ export function App() {
       else window.mason.open(id)
     })
     const offNotice = window.mason.onNotice((text) => flashNote({ text, tone: 'ok' }))
+    // A spin-off opens right beside the window it came from; focus stays where you are.
+    const offSpun = window.mason.onSpunoff((host, from) => {
+      const after = (list: string[]) => {
+        const i = from ? list.indexOf(from) : -1
+        return i < 0 ? [...list, host] : [...list.slice(0, i + 1), host, ...list.slice(i + 1)]
+      }
+      setOpenHosts((hs) => (hs.includes(host) ? hs : after(hs)))
+      setOrder((o) => (o.length && !o.includes(host) ? after(o) : o))
+      setTick((t) => t + 1)
+    })
     return () => {
       offPeek()
       offNotice()
+      offSpun()
     }
   }, [])
 
@@ -563,6 +585,14 @@ export function App() {
         if (e.key === '2' && !openHosts.length) return
         return setView(e.key === '1' ? 'projects' : 'open')
       }
+      // ⌘J: the next session waiting on you, wherever you are.
+      if (e.metaKey && e.code === 'KeyJ') {
+        e.preventDefault()
+        const waiting = allSessions.filter(({ s }) => s.status === 'needs').map(({ s }) => s)
+        if (!waiting.length) return flashNote({ text: 'Nothing is waiting on you.', tone: 'muted' })
+        const i = waiting.findIndex((s) => s.host && s.host === focusHost)
+        return void open(waiting[(i + 1) % waiting.length])
+      }
       if (view === 'open' && e.metaKey && windows.length) {
         const c = e.code
         if (c === 'BracketLeft' || c === 'BracketRight') {
@@ -579,6 +609,7 @@ export function App() {
           return showProject(all[(all.indexOf(only) + 1) % all.length])
         }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
+        if (c === 'KeyN' && e.shiftKey && focusHost) return e.preventDefault(), setSpinning(focusHost)
         if (c === 'KeyT' && !e.shiftKey && focusHost) {
           e.preventDefault()
           return void window.mason.terminalHere(focusHost).then(handle)
@@ -788,6 +819,7 @@ export function App() {
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = 'move'
                     e.dataTransfer.setData('text/plain', w.title)
+                    e.dataTransfer.setData('application/x-mason-window', w.host) // a rearrange, not text for a terminal
                     setDragging(w.host)
                   }}
                   onDragEnd={() => {
@@ -824,6 +856,9 @@ export function App() {
                           <FocusIcon />
                         </button>
                       )}
+                      <button className="x note-x" type="button" aria-label="Spin off a side thought into a new session here" title="Spin off a side thought: a new session in this folder (⌘⇧N)" onClick={() => setSpinning(w.host)}>
+                        <BranchIcon />
+                      </button>
                       {w.sid && (
                         <button
                           className={`x note-x ${w.myNote && tucked.has(`s:${w.sid}`) ? 'has-note' : ''}`}
@@ -844,6 +879,25 @@ export function App() {
                     </>
                   )}
                 </div>
+                {spinning === w.host && (
+                  <input
+                    className="spin-box"
+                    autoFocus
+                    maxLength={10000}
+                    placeholder="Side thought… Enter starts it as a new session in this folder (empty: a blank one). Esc cancels."
+                    aria-label="Side thought to spin off"
+                    onKeyDown={(e) => {
+                      e.stopPropagation()
+                      if (e.key === 'Escape') return setSpinning(null), setTick((t) => t + 1)
+                      if (e.key !== 'Enter') return
+                      const thought = e.currentTarget.value
+                      setSpinning(null)
+                      setFocusHost(w.host)
+                      window.mason.spinoff(w.host, thought).then((r) => r.error && flashNote({ text: r.error, tone: 'muted' }))
+                    }}
+                    onBlur={() => setSpinning(null)}
+                  />
+                )}
                 {w.sid && noting === `s:${w.sid}` ? (
                   <NoteEdit
                     initial={w.myNote ?? ''}
@@ -1216,6 +1270,14 @@ export function App() {
               >
                 Summaries {state.summaries ? 'on' : 'off'}
               </button>
+              <button
+                type="button"
+                aria-pressed={state.notify}
+                onClick={() => window.mason.setNotify(!state.notify)}
+                title={state.notify ? 'A Mac notification when a session starts waiting on you while Mason is in the background. Click to turn off.' : 'Notifications are off. Click to get one when a session starts waiting on you.'}
+              >
+                Notifications {state.notify ? 'on' : 'off'}
+              </button>
             </span>
           )}
           <span className="theme" role="group" aria-label="Theme">
@@ -1464,7 +1526,7 @@ function NoteView({ body, className, onEdit, onTuck }: { body: string; className
     return () => ro.disconnect()
   }, [body, open])
   return (
-    <div className={`note-view ${className} ${open ? 'open' : ''} ${overflows ? 'folded' : ''}`}>
+    <div className={`note-view ${className} ${open ? 'open' : ''} ${overflows ? 'folded' : ''}`} draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', body)}>
       <NoteIcon />
       <button className="note-body" type="button" onClick={onEdit} title="Edit note">
         <span ref={text}>{body}</span>
@@ -1540,7 +1602,12 @@ function SavedRow({ item }: { item: AppState['saved'][number] }) {
     } catch {}
   }
   return (
-    <div className="mini saved">
+    <div
+      className="mini saved"
+      draggable
+      title="Drag onto a session (in the Open tab or Peek) to add it to your prompt"
+      onDragStart={(e) => e.dataTransfer.setData('text/plain', item.body)}
+    >
       <div className="mini-text">
         <span className="mini-sub">
           <b className={`kind ${item.kind}`}>{KIND_LABEL[item.kind]}</b>

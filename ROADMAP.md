@@ -22,6 +22,8 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] Move a Terminal session into Mason; resume paused sessions; start new ones per project
 - [x] Shush: collapse everything except what you open on purpose
 - [x] Open tab: several sessions at once, stacked / side by side / grid / one at a time, drag to reorder, ⌘ shortcuts
+- [x] Spin-off: /spinoff <thought> in Claude, or ⌘⇧N, starts a side thought as a new session in the same folder
+- [x] From easl: ⌘J to the next waiting session, a Mac notification when one starts waiting, drag text into a session
 - [x] Plain terminals inside Mason (+ New terminal per project, ⌘T in the Open tab) and + New project for any folder
 - [x] Open tab by project: group windows under project headings, or show just one project (⌘P)
 - [x] Scroll back through a session's history inside Mason

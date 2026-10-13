@@ -13,7 +13,7 @@ dir="$HOME/.mason"
 [ -d "$dir" ] || exit 0
 umask 077
 input=$(cat)
-# /stash: hand the prompt to Mason and block it, so Claude never sees it and it costs no turn.
+# /stash and /spinoff: hand the prompt to Mason and block it, so Claude never sees it and it costs no turn.
 if [ "$1" = UserPromptSubmit ]; then
   case "$input" in
     *'"prompt":"/stash'*|*'"prompt": "/stash'*)
@@ -21,6 +21,12 @@ if [ "$1" = UserPromptSubmit ]; then
       tmp="$dir/stash/.$$"
       printf '%s' "$input" > "$tmp" && mv "$tmp" "$dir/stash/$(date +%s).$$.json"
       printf '%s\\n' '{"decision":"block","reason":"Saved to Mason ✓  (not sent to Claude)"}'
+      exit 0 ;;
+    *'"prompt":"/spinoff'*|*'"prompt": "/spinoff'*)
+      mkdir -p "$dir/spinoff"
+      tmp="$dir/spinoff/.$$"
+      printf '%s' "$input" > "$tmp" && mv "$tmp" "$dir/spinoff/$(date +%s).$$.json"
+      printf '%s\\n' '{"decision":"block","reason":"Spun off in Mason ✓  (a new session in this project; not sent to Claude)"}'
       exit 0 ;;
   esac
 fi

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DATA_DIR, openDb, type DB } from './db'
 import { EVENTS_FILE, lastActiveSession, pruneNeeds, readEvents, writeHookScript } from './events'
+import { SPINOFF_DIR, spinPrompt, takeSpinoffs, writeSpinoffCommand } from './spinoff'
 import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { TRAY_1X, TRAY_2X } from './trayIcon'
 import { rememberHostedIds, rememberTerminals, reopenAfterRestart } from './reopen'
@@ -45,8 +46,30 @@ function send(channel: string, ...args: unknown[]): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
 
+// A Mac notification the moment a session starts waiting on you, but only while you're somewhere else:
+// with Mason in front, the coral dot already says it. Clicking it opens that session in Peek.
+const notifyOn = () => (db.prepare("SELECT value FROM settings WHERE key = 'notify'").get() as { value: string } | undefined)?.value !== 'off'
+let wasWaiting: Set<string> | null = null // null until the first look, which only takes stock (no burst at launch)
+function notifyNewWaiting(s: ReturnType<typeof state>): void {
+  const rows = s.projects.flatMap((p) => p.sessions.filter((x) => x.status === 'needs').map((x) => ({ ...x, project: p.name })))
+  const before = wasWaiting
+  wasWaiting = new Set(rows.map((r) => r.id))
+  if (!before) return
+  const fresh = rows.filter((r) => !before.has(r.id))
+  if (!fresh.length || win?.isFocused() || !notifyOn() || !Notification.isSupported()) return
+  for (const r of fresh.slice(0, 3)) {
+    const n = new Notification({ title: `${r.title} · ${r.project}`, body: r.now || 'Waiting on you', silent: false })
+    n.on('click', () => {
+      showMason()
+      send('mason:peek', r.host ? { host: r.host, id: r.id } : null, r.id)
+    })
+    n.show()
+  }
+}
+
 function pushState(): void {
   const s = state()
+  notifyNewWaiting(s)
   // The Dock badge counts sessions waiting on you, so you can see it from anywhere.
   const waiting = s.projects.reduce((n, p) => n + p.sessions.filter((x) => x.status === 'needs').length, 0)
   app.dock?.setBadge(waiting ? String(waiting) : '')
@@ -292,6 +315,7 @@ app.whenReady().then(() => {
   writeHookScript()
   writePauseScript()
   writeStashCommand()
+  writeSpinoffCommand()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
@@ -467,6 +491,52 @@ app.whenReady().then(() => {
     refreshSoon(false)
   }
   takePauses()
+
+  // Spin-off: start a side thought as its own Claude session in the same folder. The new window opens beside the
+  // one it came from, and focus stays where you are.
+  const titleOf = (sid: string | null) =>
+    sid
+      ? ((
+          db
+            .prepare(
+              `SELECT COALESCE(sp.name, su.title, s.ai_title) AS t FROM sessions s
+               LEFT JOIN session_prefs sp ON sp.session_id = s.id LEFT JOIN summaries su ON su.session_id = s.id WHERE s.id = ?`
+            )
+            .get(sid) as { t: string | null } | undefined
+        )?.t ?? null)
+      : null
+  const spinOff = (cwd: string, fromSid: string | null, fromHost: string | null, thought: string) => {
+    if (!existsSync(cwd)) return null
+    const host = startSession(cwd, undefined, spinPrompt(thought, titleOf(fromSid)))
+    send('mason:spunoff', host, fromHost)
+    refreshSoon(false)
+    return host
+  }
+  const takeSpun = () => {
+    const live = readLive()
+    for (const s of takeSpinoffs()) {
+      const l = s.from ? live.get(s.from) : undefined
+      spinOff(s.cwd, s.from, (l && hostFor(l)) ?? null, s.thought)
+    }
+  }
+  takeSpun()
+  try {
+    watch(SPINOFF_DIR, (_ev, f) => f?.endsWith('.json') && setTimeout(takeSpun, 200))
+  } catch {}
+  ipcMain.handle('session:spinoff', (e, from: unknown, thought: unknown) => {
+    if (!trusted(e) || typeof from !== 'string' || !NAME_RE.test(from) || typeof thought !== 'string') return { error: 'bad request' }
+    const h = listHosted().find((x) => x.name === from)
+    if (!h) return { error: 'Couldn’t find that window.' }
+    const sid = [...readLive()].find(([, l]) => hostFor(l) === from)?.[0] ?? h.resume ?? null
+    const host = spinOff(h.cwd, sid, from, thought.trim().slice(0, 10_000))
+    return host ? { host } : { error: 'That folder no longer exists.' }
+  })
+  ipcMain.handle('notify:set', (e, on: unknown) => {
+    if (!trusted(e) || typeof on !== 'boolean') return false
+    db.prepare("INSERT INTO settings (key, value) VALUES ('notify', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(on ? 'on' : 'off')
+    pushState()
+    return true
+  })
 
   // /stash from inside Claude, filed into "saved".
   const takeStashed = () => takeStashes(db) && refreshSoon(false)

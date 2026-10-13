@@ -31,6 +31,16 @@ const api = {
   star: (id: string, starred: boolean): Promise<boolean> => ipcRenderer.invoke('session:star', id, starred),
   search: (query: string): Promise<FoundView[]> => ipcRenderer.invoke('session:search', query),
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
+  setNotify: (on: boolean): Promise<boolean> => ipcRenderer.invoke('notify:set', on),
+  spinoff: (fromHost: string, thought: string): Promise<HostResult> => ipcRenderer.invoke('session:spinoff', fromHost, thought),
+  // A spin-off started (from /spinoff in Claude, or ⌘⇧N): open its window beside the one it came from.
+  onSpunoff: (cb: (host: string, from: string | null) => void) => {
+    const listener = (_e: IpcRendererEvent, host: string, from: string | null) => cb(host, from)
+    ipcRenderer.on('mason:spunoff', listener)
+    return () => {
+      ipcRenderer.removeListener('mason:spunoff', listener)
+    }
+  },
   setNote: (target: string, body: string): Promise<boolean> => ipcRenderer.invoke('note:set', target, body),
   removeSaved: (id: number): Promise<boolean> => ipcRenderer.invoke('saved:remove', id),
 
