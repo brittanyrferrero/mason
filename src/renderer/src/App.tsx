@@ -55,15 +55,17 @@ const PinIcon = ({ filled = false }: { filled?: boolean }) => (
     <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
   </svg>
 )
+// Rename is the pen; notes are a notepad.
 const RenameIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
   </svg>
 )
 const NoteIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M13 21h8" />
-    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+    <path d="M8 2v4M12 2v4M16 2v4" />
+    <rect x="4" y="4" width="16" height="18" rx="2" />
+    <path d="M8 10h6M8 14h8M8 18h5" />
   </svg>
 )
 const StarIcon = ({ filled = false }: { filled?: boolean }) => (
@@ -959,11 +961,17 @@ export function App() {
                       {w.focus && <span className="wf"> · {w.focus}</span>}
                     </b>
                   )}
+                  {w.sid && renamingHost !== w.host && ending !== w.host && (
+                    <button className="x note-x title-pen" type="button" aria-label="Rename this session" title="Rename (or double-click the title)" onClick={() => setRenamingHost(w.host)}>
+                      <RenameIcon />
+                    </button>
+                  )}
                   {footers[w.host]?.mode && (
                     <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
                       {footers[w.host]!.mode}
                     </span>
                   )}
+                  <span className="bar-gap" />
                   {ending === w.host ? (
                     <>
                       <span className="ask">End this session?</span>
@@ -976,17 +984,6 @@ export function App() {
                     </>
                   ) : (
                     <>
-                      {n > 1 && (
-                        <button
-                          className="x spot-x"
-                          type="button"
-                          aria-label={big === w.host ? 'Shrink back into the layout' : 'Expand to fill Mason'}
-                          title={big === w.host ? 'Shrink back (⌘E)' : 'Expand to fill Mason · your layout stays as it is (⌘E)'}
-                          onClick={() => toggleExpand(w.host)}
-                        >
-                          {big === w.host ? <ShrinkIcon /> : <ExpandIcon />}
-                        </button>
-                      )}
                       {n > 1 && big !== w.host && (
                         <button
                           className={`x spot-x ${spot === w.host ? 'on' : ''}`}
@@ -996,11 +993,6 @@ export function App() {
                           onClick={() => toggleSpotlight(w.host)}
                         >
                           <FocusIcon />
-                        </button>
-                      )}
-                      {w.sid && (
-                        <button className="x note-x" type="button" aria-label="Rename this session" title="Rename (or double-click the title)" onClick={() => setRenamingHost(w.host)}>
-                          <RenameIcon />
                         </button>
                       )}
                       <button className="x note-x" type="button" aria-label="Spin off a side thought into a new session here" title="Spin off a side thought: a new session in this folder (⌘⇧N)" onClick={() => setSpinning(w.host)}>
@@ -1015,6 +1007,17 @@ export function App() {
                           onClick={() => openNote(`s:${w.sid}`)}
                         >
                           <NoteIcon />
+                        </button>
+                      )}
+                      {n > 1 && (
+                        <button
+                          className="x spot-x"
+                          type="button"
+                          aria-label={big === w.host ? 'Shrink back into the layout' : 'Expand to fill Mason'}
+                          title={big === w.host ? 'Shrink back (⌘E)' : 'Expand to fill Mason · your layout stays as it is (⌘E)'}
+                          onClick={() => toggleExpand(w.host)}
+                        >
+                          {big === w.host ? <ShrinkIcon /> : <ExpandIcon />}
                         </button>
                       )}
                       <button className="x" type="button" aria-label="Hide this window (the session keeps running)" title="Hide window · the session keeps running, reopen it from Projects (⌘⇧W)" onClick={() => closeWindow(w.host)}>
