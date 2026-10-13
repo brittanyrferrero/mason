@@ -84,11 +84,16 @@ export function Term({ name, focus, tick, peek = false }: { name: string; focus:
     // Dropped text (a note, a saved idea, a snippet from another app) lands in the prompt as a paste: it's never
     // sent on its own, and control characters are stripped so nothing in it can act like a keypress.
     if (!e.dataTransfer.files.length) {
-      const text = e.dataTransfer.getData('text/plain').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
-      if (!text) return
+      const term = termRef.current
+      let text = e.dataTransfer.getData('text/plain').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+      // Line breaks are only safe when the program has asked for bracketed paste (Claude, zsh do): then the whole
+      // drop arrives marked as pasted text. Anywhere else (bash, an ssh session) a newline would press Enter and run
+      // whatever follows, so it becomes a space instead.
+      if (!term?.modes.bracketedPasteMode) text = text.replace(/[\n\t]+/g, ' ')
+      if (!text.trim() || !term) return
       e.preventDefault()
-      termRef.current?.paste(text)
-      termRef.current?.focus()
+      term.paste(text)
+      term.focus()
       return
     }
     e.preventDefault()
