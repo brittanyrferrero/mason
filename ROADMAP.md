@@ -48,6 +48,8 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] **Help card** (? top right): what the dots mean, the commands you can type inside Claude, the global hotkey,
       then the keyboard shortcuts. The empty Saved list explains how to fill it.
 - [x] **Focus on one** (Open tab). The target in a window's title bar (⌘⇧F) puts that window first and dims the others.
+- [x] **Expand** (Open tab). The arrows in a window's title bar (⌘E) make it fill Mason; shrink drops it back
+      into the grid, stack, or whatever layout was there. Nothing about the layout changes.
 - [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
 - [x] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
 - [x] **Find** (/ or ⌘F): filters the live list as you type and searches every past conversation, any age; click to resume. `*` for starred.

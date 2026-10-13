@@ -49,3 +49,10 @@ npx electron-vite build
 ## Status
 
 See [ROADMAP.md](ROADMAP.md) for what's done and what's next. The full plan is in [ROADMAP.md](ROADMAP.md).
+
+### Signing (so macOS remembers permissions)
+
+`npm run dist` signs the app with a self-signed **Mason Local** certificate from your login keychain
+(`scripts/sign.mjs`). A stable signature makes macOS treat every rebuild as the same app, so permissions you grant
+(folders, Photos, controlling Terminal) stick instead of being asked again after each build. Without the
+certificate, the build still works but keeps a throwaway signature.

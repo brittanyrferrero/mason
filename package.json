@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "postinstall": "electron-rebuild -f -w better-sqlite3,node-pty",
-    "dist": "electron-vite build && electron-builder --mac dir"
+    "dist": "electron-vite build && electron-builder --mac dir && node scripts/sign.mjs"
   },
   "dependencies": {
     "@fontsource/figtree": "5.3.0",

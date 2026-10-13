@@ -83,6 +83,16 @@ const FocusIcon = () => (
     <circle cx="12" cy="12" r="3.5" />
   </svg>
 )
+const ExpandIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+  </svg>
+)
+const ShrinkIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />
+  </svg>
+)
 const BranchIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="6" cy="5" r="2" />
@@ -133,6 +143,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Move window later', ['⌘', '⇧', ']']],
       ['Move window earlier', ['⌘', '⇧', '[']],
       ['Focus this window', ['⌘', '⇧', 'F']],
+      ['Expand / shrink window', ['⌘', 'E']],
       ['One at a time', ['⌘', '↵']],
       ['Change layout', ['⌘', 'L']],
       ['Change order', ['⌘', 'O']],
@@ -484,6 +495,10 @@ export function App() {
   )
   const spot = windows.length > 1 && windows.some((w) => w.host === spotlight) ? spotlight : null
   const toggleSpotlight = (host: string) => setSpotlight((cur) => (cur === host ? null : host))
+  // Expand: one window fills Mason for a while; shrinking drops it back into the layout, which never changed.
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const big = windows.some((w) => w.host === expanded) ? expanded : null
+  const toggleExpand = (host: string) => setExpanded((cur) => (cur === host ? null : host))
 
   useEffect(() => {
     if (view === 'open' && !windows.length) setView('projects')
@@ -620,6 +635,7 @@ export function App() {
           return sid && openNote(`s:${sid}`)
         }
         if (c === 'KeyF' && e.shiftKey && focusHost) return e.preventDefault(), toggleSpotlight(focusHost)
+        if (c === 'KeyE' && !e.shiftKey && (big || focusHost)) return e.preventDefault(), toggleExpand((big || focusHost)!)
         if (c === 'KeyK' && e.shiftKey && focusHost) return e.preventDefault(), ending === focusHost ? endWindow(focusHost) : setEnding(focusHost)
       }
       // In the Open tab every key belongs to the terminal (Claude uses Esc, arrows, etc.).
@@ -653,7 +669,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending, shown, only, openProjects, peeking])
+  }, [visibleRows, cursor, view, openHosts, allSessions, windows, focusHost, layout, ending, shown, only, openProjects, peeking, big])
 
   useEffect(() => {
     if (!keysOpen) return
@@ -796,7 +812,7 @@ export function App() {
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop}`}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''}`}
                 onFocusCapture={() => setFocusHost(w.host)}
                 onDragOver={(e) => {
                   if (!dragging || dragging === w.host) return
@@ -846,6 +862,17 @@ export function App() {
                   ) : (
                     <>
                       {n > 1 && (
+                        <button
+                          className="x spot-x"
+                          type="button"
+                          aria-label={big === w.host ? 'Shrink back into the layout' : 'Expand to fill Mason'}
+                          title={big === w.host ? 'Shrink back (⌘E)' : 'Expand to fill Mason · your layout stays as it is (⌘E)'}
+                          onClick={() => toggleExpand(w.host)}
+                        >
+                          {big === w.host ? <ShrinkIcon /> : <ExpandIcon />}
+                        </button>
+                      )}
+                      {n > 1 && big !== w.host && (
                         <button
                           className={`x spot-x ${spot === w.host ? 'on' : ''}`}
                           type="button"

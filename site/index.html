@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Mason: one quiet place for all your Claude Code sessions.">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Mason</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400&display=swap">
+<style>
+/* Layout: one narrow column, like the app's Quiet list. Paper, ink, and two signal colors. */
+:root {
+  --paper: #f7f7f5; --card: #ffffff; --ink: #18181a; --ink-soft: #3a3a3e; --muted: #707076; --faint: #b4b4ba;
+  --edge: #e4e4e7; --go: #2f9468; --wait: #e0533f; --wait-tint: rgba(224, 83, 63, 0.07);
+  --serif: 'Source Serif 4', Georgia, serif;
+  --app-serif: 'Fraunces', Georgia, serif;
+  --body: 'Figtree', system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141416; --card: #1d1d20; --ink: #ededef; --ink-soft: #c9c9ce; --muted: #9a9aa2; --faint: #5c5c64;
+    --edge: #2a2a2f; --go: #5fcf98; --wait: #ff7a66; --wait-tint: rgba(255, 122, 102, 0.08); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141416; --card: #1d1d20; --ink: #ededef; --ink-soft: #c9c9ce; --muted: #9a9aa2; --faint: #5c5c64;
+  --edge: #2a2a2f; --go: #5fcf98; --wait: #ff7a66; --wait-tint: rgba(255, 122, 102, 0.08); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6;
+  padding-inline: 20px; -webkit-font-smoothing: antialiased;
+}
+.col { max-width: 620px; margin-inline: auto; padding-block: 72px 96px; display: grid; gap: 72px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 300; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+/* The app examples keep the app's own Fraunces setting. */
+.m-name { font-family: var(--app-serif); font-optical-sizing: none; font-variation-settings: 'opsz' 24; }
+p { margin: 0; text-wrap: pretty; }
+
+/* Hero */
+.mark { font-family: var(--serif); font-size: 15px; color: var(--muted); }
+.mark b { font-weight: 400; color: var(--ink); }
+.hero { display: grid; gap: 18px; }
+.hero { container-type: inline-size; }
+.hero h1 { font-size: clamp(40px, 8vw, 58px); line-height: 1.08; font-weight: 300; }
+/* Wide enough: the sentence under the headline stays on one line. */
+@container (min-width: 800px) { .hero p { white-space: nowrap; max-width: none; } }
+.hero p { font-size: 18px; color: var(--ink-soft); max-width: 34em; }
+.meta { font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+/* Mock of the Quiet list: mirrors the app's own styles */
+.mock { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.07); overflow: hidden; font-size: 14px; line-height: 1.4; }
+.mock-chrome { display: flex; gap: 7px; padding: 12px 14px 0; }
+.mock-chrome i { width: 11px; height: 11px; border-radius: 50%; background: var(--edge); }
+.mock-in { padding: 6px 18px 18px; }
+.m-tabs { display: flex; gap: 4px; align-items: center; border-bottom: 1px solid var(--edge); margin-bottom: 16px; }
+.m-tab { padding: 8px 12px 10px; font-size: 15px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 8px; align-items: center; }
+.m-tab.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+.m-count { font-size: 12px; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 999px; background: var(--edge); color: var(--ink-soft); }
+.m-help { margin-left: auto; width: 19px; height: 19px; border-radius: 50%; border: 1.5px solid var(--faint); color: var(--faint); font-size: 11px; display: grid; place-items: center; }
+.m-list { max-width: 500px; margin-inline: auto; display: grid; gap: 4px; }
+.m-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
+.m-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--edge); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; }
+.m-pill svg { width: 13px; height: 13px; }
+.m-proj { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--edge); }
+.m-proj svg { width: 13px; height: 13px; color: var(--muted); flex: none; }
+.m-name { font-size: 20px; letter-spacing: -0.02em; }
+.m-hint { margin-left: auto; display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
+.m-hint.wait { color: var(--wait); }
+.m-body { padding-left: 20px; }
+.m-acts { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 6px 4px; font-size: 13.5px; color: var(--muted); }
+.m-acts span { text-decoration: underline; text-decoration-color: var(--edge); text-underline-offset: 4px; }
+.m-row { display: flex; gap: 12px; padding: 10px 6px; border-bottom: 1px solid var(--edge); align-items: baseline; }
+.m-row .dot { position: relative; top: -1px; }
+.m-row > div { min-width: 0; display: grid; gap: 2px; }
+.m-title { font-size: 15.5px; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.m-title b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tag { font-size: 12.5px; color: var(--wait); }
+.m-now { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-now.next { color: var(--faint); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; display: inline-block; }
+.dot.go { background: var(--go); }
+.dot.wait { background: var(--wait); }
+.star { width: 12px; height: 12px; color: var(--ink-soft); flex: none; align-self: center; }
+.m-new { padding: 14px 6px 0; font-size: 13.5px; color: var(--muted); }
+.m-new span, .m-links span { text-decoration: underline; text-decoration-color: var(--edge); text-underline-offset: 4px; }
+.m-links { display: flex; flex-wrap: wrap; gap: 6px 20px; padding: 14px 0 0; font-size: 14px; color: var(--muted); }
+.m-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 26px; font-size: 12px; color: var(--faint); }
+.m-seg { display: flex; gap: 3px; align-items: center; }
+.m-seg b, .m-seg span { font-weight: 400; padding: 3px 7px; border-radius: 6px; }
+.m-seg b { background: var(--card); color: var(--ink-soft); }
+.m-seg span { color: var(--muted); }
+@media (max-width: 520px) { .m-theme { display: none; } }
+.caption { font-size: 13px; color: var(--muted); padding: 12px 18px 14px; border-top: 1px solid var(--edge); }
+@media (max-width: 520px) { .m-pills { display: none; } .mock-in { padding-inline: 12px; } .m-body { padding-left: 8px; } }
+
+/* Mock of the Open tab */
+.o-bar { text-align: right; font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+.o-pick { position: relative; display: inline-flex; align-items: center; gap: 3px; color: var(--ink-soft); font-weight: 500; border-bottom: 1px dotted var(--faint); }
+.o-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
+.o-pick svg { width: 10px; height: 10px; }
+.o-pick:focus-within { outline: 2px solid var(--go); outline-offset: 2px; border-radius: 3px; }
+.wins { display: grid; gap: 8px; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); }
+.wins.one .win:not(.focused) { display: none; }
+.wins.side .win { height: 150px; }
+.o-group { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin: 4px 0 -3px 2px; }
+.o-group:first-child { margin-top: 0; }
+.wins.one .o-group:not(.keep) { display: none; }
+.win { background: #1c1c1e; border-radius: 9px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; height: 132px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 8px 22px rgba(0, 0, 0, 0.14); }
+.win.focused { box-shadow: 0 0 0 1.5px var(--muted), 0 8px 22px rgba(0, 0, 0, 0.14); }
+.w-bar { height: 26px; flex: none; background: #2c2c2e; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 10px; font-size: 11px; color: #d1d1d6; }
+.w-bar b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.w-bar .dot { width: 6px; height: 6px; }
+.w-bar .icons { display: flex; gap: 8px; color: #8e8e93; flex: none; }
+.w-bar .icons svg { width: 10px; height: 10px; display: block; }
+.w-ask { color: #d1d1d6; white-space: nowrap; flex: none; display: flex; gap: 4px; align-items: center; }
+.w-ask i { font-style: normal; background: var(--wait); color: #fff; border-radius: 4px; padding: 1px 6px; }
+.w-ask u { text-decoration: none; color: #8e8e93; padding: 1px 4px; }
+.w-term { flex: 1; min-height: 0; overflow: hidden; padding: 7px 10px; font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: #c7c7cc; white-space: pre; }
+.w-term .k { color: #8e8e93; }
+.w-term .a { color: #e8a48f; }
+.w-term .g { color: #7fcf9f; }
+@media (max-width: 520px) { .wins { --cols: 1 !important; } .win:nth-of-type(n+4) { display: none; } }
+
+/* Sections */
+/* The intro and the divider under it run wider than the reading column. */
+.col { --wide: min(860px, calc(100vw - 40px)); }
+.hero, .ruled::before { margin-inline: calc((100% - var(--wide)) / 2); }
+.ruled { margin-top: -28px; }
+.ruled::before { content: ""; height: 1px; background: var(--edge); margin-bottom: 26px; }
+section { display: grid; gap: 22px; }
+h2 { font-size: 30px; line-height: 1.15; }
+.lede { color: var(--ink-soft); }
+.list { display: grid; gap: 0; border-top: 1px solid var(--edge); }
+.item { display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--edge); }
+.item h3 { font-family: var(--body); font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.item p { color: var(--ink-soft); font-size: 15px; min-width: 0; }
+@media (max-width: 520px) { .item { grid-template-columns: 1fr; gap: 2px; } }
+
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.rules li { padding-left: 22px; position: relative; color: var(--ink-soft); }
+.rules li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.rules li:first-child::before { background: var(--wait); }
+
+kbd { font-family: var(--body); font-size: 12.5px; padding: 1px 6px; border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 5px; background: var(--card); color: var(--ink-soft); white-space: nowrap; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--card); border: 1px solid var(--edge); border-radius: 5px; padding: 0 5px; }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; font-size: 14.5px; }
+.keys div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--edge); color: var(--ink-soft); }
+
+.stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 18px 24px; }
+.stack div { display: grid; gap: 2px; }
+.stack b { font-weight: 600; font-size: 15px; }
+.stack span { color: var(--muted); font-size: 14px; }
+
+pre { margin: 0; overflow-x: auto; background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 16px 18px; font-family: var(--mono); font-size: 13px; line-height: 1.7; color: var(--ink-soft); }
+pre .c { color: var(--muted); }
+
+a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--ink); }
+a:focus-visible { outline: 2px solid var(--go); outline-offset: 3px; border-radius: 6px; }
+.dl { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.btn { display: inline-flex; align-items: center; background: var(--ink); color: var(--paper); text-decoration: none; font-weight: 500; font-size: 15px; padding: 10px 20px; border-radius: 999px; }
+.btn:hover { opacity: 0.88; }
+.quiet { font-size: 14.5px; color: var(--muted); }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 22px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; row-gap: 10px; }
+.steps li::before { content: counter(s); grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--edge); background: var(--card); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: var(--ink-soft); line-height: 1; }
+.steps li > * { min-width: 0; grid-column: 2; }
+.steps li div { color: var(--ink-soft); font-size: 15px; }
+.steps b, .notes b { color: var(--ink); font-weight: 600; }
+.notes { display: grid; gap: 10px; font-size: 14.5px; color: var(--ink-soft); border-top: 1px solid var(--edge); padding-top: 16px; }
+.notes summary { cursor: pointer; color: var(--muted); list-style: none; }
+.notes summary::before { content: "+ "; }
+.notes[open] summary::before { content: "– "; }
+.notes summary:hover { color: var(--ink); }
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.group { background: var(--card); border: 1px solid var(--edge); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.group h3 { font-size: 20px; line-height: 1.2; }
+.group ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.group li { font-size: 14.5px; color: var(--ink-soft); padding-left: 14px; position: relative; line-height: 1.5; }
+.group li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge); padding-top: 20px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="col">
+
+  <header class="hero">
+    <div class="mark"><b>m.</b> &nbsp;Mason</div>
+    <h1>One quiet place for all your Claude Code sessions</h1>
+    <p>Mason holds what your head drops and only raises what actually needs your&nbsp;attention.</p>
+  </header>
+
+  <section class="ruled">
+    <h2>Every project in its place</h2>
+    <p class="lede">Sessions sort themselves into projects by folder, and sessions in a git worktree join their main project.<br>Open the project you're working on and fold the rest away. A closed project still shows when something inside it needs you.</p>
+    <figure class="mock" aria-label="Example of Mason's project list">
+      <div class="mock-chrome"><i></i><i></i><i></i></div>
+      <div class="mock-in">
+        <div class="m-tabs"><span class="m-tab on">Projects</span><span class="m-tab">Open <span class="m-count">2</span></span><span class="m-help">?</span></div>
+        <div class="m-list">
+          <div class="m-pills"><span class="m-pill">Open all 5</span><span class="m-pill"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>Open starred 1</span><span class="m-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>Find</span><span class="m-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>Shush</span></div>
+          <div class="m-proj"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg><span class="m-name">moonbase-api</span><span class="m-hint wait"><span class="dot wait"></span>1 waiting</span></div>
+          <div class="m-body">
+            <div class="m-acts"><span>+ New session</span><span>+ New terminal</span><span>Open all 3</span><span>Note</span></div>
+            <div class="m-row"><span class="dot wait"></span><div><div class="m-title"><b>Teach the scheduler lunar time</b><span class="m-tag">waiting</span></div><div class="m-now">Asking if a moon day should really be 29.5 Earth days</div></div></div>
+            <div class="m-row"><span class="dot go"></span><div><div class="m-title"><b>Oxygen sensor webhooks</b><svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg></div><div class="m-now">Adding retries so no ping drifts off into space</div></div></div>
+            <div class="m-row"><span class="dot"></span><div><div class="m-title"><b>Rename the cheese_inventory table</b></div><div class="m-now">Wrote the migration and a rollback</div><div class="m-now next">Next: run it without waking the on-call astronaut</div></div></div>
+          </div>
+          <div class="m-proj"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg><span class="m-name">burritocopter</span><span class="m-hint"><span class="dot"></span>1 session</span></div>
+          <div class="m-proj"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg><span class="m-name">Home</span><span class="m-hint"><span class="dot"></span>1 session</span></div>
+          <div class="m-new"><span>+ New project</span></div>
+          <div class="m-links"><span>3 paused</span><span>Saved</span><span>Scratchpad</span></div>
+          <div class="m-foot"><span>Mason 0.3</span><span class="m-seg"><b>Summaries on</b><b>Notifications on</b></span><span class="m-seg m-theme"><b>Auto</b><span>Light</span><span>Dark</span></span></div>
+        </div>
+      </div>
+      <p class="caption">An example list. Green is working, grey is idle, and a session that needs you lights up.</p>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Built for an ADHD brain</h2>
+    <div class="groups">
+      <div class="group">
+        <h3>See everything at a glance</h3>
+        <ul>
+          <li>Every session in one list, grouped by project</li>
+          <li>Highlighted when one needs you, sorted to the top and badged in the Dock</li>
+          <li>Find any past conversation and pick it back up</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Remember where you were</h3>
+        <ul>
+          <li>A two-line recap: what you were doing, and the next step</li>
+          <li><code>/pause</code> writes a handoff note before stopping</li>
+          <li>Notes on any session or project that never get lost</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Catch a thought fast</h3>
+        <ul>
+          <li><kbd>⌃⌥N</kbd> from any app: type, Enter, stored</li>
+          <li><code>/stash</code> keeps Claude's last reply or an idea</li>
+          <li>Everything lands in Saved, tagged with its session</li>
+        </ul>
+      </div>
+      <div class="group">
+        <h3>Never lose a session</h3>
+        <ul>
+          <li>Close the window or quit and Claude keeps working</li>
+          <li>Open several side by side, or Peek with <kbd>Space</kbd></li>
+          <li>Terminal sessions show up and can move in</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Juggle without dropping</h2>
+    <p class="lede">Open several sessions at once and lay them out however your brain works best: in a grid, side by side, stacked, or one at a time. Keep projects together, put what's waiting first, or drag them into your own order. Mason remembers how you left it, so it's ready next time.</p>
+    <figure class="mock" aria-label="Example of Mason's Open tab">
+      <div class="mock-chrome"><i></i><i></i><i></i></div>
+      <div class="mock-in">
+        <div class="m-tabs"><span class="m-tab">Projects</span><span class="m-tab on">Open <span class="m-count">4</span></span><span class="m-help">?</span></div>
+        <p class="o-bar">4 sessions from <span class="o-pick">all projects<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span> viewed <label class="o-pick"><span id="o-layout-label">in a grid</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg><select id="o-layout" aria-label="Layout"><option value="grid">in a grid</option><option value="side">side by side</option><option value="stack">stacked</option><option value="one">one at a time</option></select></label> organized <span class="o-pick">by project<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span></p>
+        <div class="wins" id="o-wins">
+          <p class="o-group keep">moonbase-api</p>
+        <div class="win focused"><div class="w-bar"><span class="dot wait"></span><b>Teach the scheduler lunar time</b><span class="w-ask">Allow? <i>Yes</i><u>No</u></span><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Bash(npm test -- --grep "lunar")</span>
+  A moon day is 29.5 Earth days.
+  Should standup still be daily?</div></div>
+        <div class="win"><div class="w-bar"><span class="dot go"></span><b>Oxygen sensor webhooks</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Update(src/webhooks/retry.ts)</span>
+  <span class="g">+ backoff: exponential, max 6 tries</span>
+  No ping drifts off into space.
+<span class="a">* Orbiting… (41s)</span></div></div>
+        <div class="win"><div class="w-bar"><span class="dot "></span><b>Rename the cheese_inventory table</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Wrote migrations/0042_brie.sql</span>
+  Rollback included, just in case.
+
+<span class="k">❯</span> </div></div>
+
+          <p class="o-group">burritocopter</p>
+        <div class="win"><div class="w-bar"><span class="dot go"></span><b>Drop zone geofencing</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Update(src/flight/landing.ts)</span>
+  <span class="g">+ hover 2m above picnic blankets</span>
+  No more salsa on the windshield.
+<span class="a">* Wrapping… (12s)</span></div></div>
+        </div>
+      </div>
+      <p class="caption">Try the layout menu above. The outlined window is the one you're typing in.</p>
+    </figure>
+  </section>
+
+  <section id="install">
+    <h2>Download and install</h2>
+    <p class="lede">You need a Mac with Apple silicon, <a href="https://docs.claude.com/en/docs/claude-code">Claude Code</a>, <a href="https://brew.sh">Homebrew</a>, and Node.js 20 or newer. Mason builds on your own machine, so it takes a couple of minutes the first time.</p>
+    <div class="dl">
+      <a class="btn" href="https://github.com/brittanyrferrero/mason/archive/refs/heads/main.zip">Download Mason (.zip)</a>
+      <a class="quiet" href="https://github.com/brittanyrferrero/mason">View on GitHub</a>
+    </div>
+    <ol class="steps">
+      <li><div><b>Get the code.</b> Unzip the download and move the folder to <code>~/mason</code>, or clone it:</div>
+        <pre>git clone https://github.com/brittanyrferrero/mason.git ~/mason</pre></li>
+      <li><div><b>Install tmux and the dependencies.</b></div>
+        <pre>brew install tmux
+cd ~/mason
+npm install</pre></li>
+      <li><div><b>Turn on the hooks.</b> This is what lights up "waiting on you" and adds <code>/pause</code> and <code>/stash</code> to Claude. Your settings file is backed up first.</div>
+        <pre>node scripts/hooks.mjs install</pre></li>
+      <li><div><b>Build and open Mason.</b> This puts Mason.app in <code>~/Applications</code> and opens it.</div>
+        <pre>scripts/install-app.sh</pre></li>
+      <li><div><b>Start working.</b> Your existing Claude sessions appear right away. Press <kbd>⌃⌥M</kbd> from anywhere to bring Mason forward, and <kbd>?</kbd> inside it for the help card.</div></li>
+    </ol>
+    <details class="notes">
+      <summary>Updating, uninstalling, and the escape hatch</summary>
+      <p><b>Updating.</b> Pull the latest code and run <code>scripts/install-app.sh</code> again. Running sessions keep going and reappear when the new version opens.</p>
+      <p><b>Uninstalling.</b> <code>node scripts/hooks.mjs uninstall</code> removes exactly what it added. Then delete Mason.app and <code>~/.mason</code>.</p>
+      <p><b>Escape hatch.</b> From any Terminal, <code>tmux -L mason ls</code> lists Mason's sessions and <code>tmux -L mason attach -t &lt;name&gt;</code> opens one.</p>
+    </details>
+  </section>
+
+  <section>
+    <h2>Keys worth knowing</h2>
+    <div class="keys">
+      <div><span>Bring Mason forward</span><kbd>⌃⌥M</kbd></div>
+      <div><span>Quick capture</span><kbd>⌃⌥N</kbd></div>
+      <div><span>Peek at a session</span><kbd>Space</kbd></div>
+      <div><span>Find</span><kbd>/</kbd></div>
+      <div><span>Rename / Pin / Star</span><span><kbd>R</kbd> <kbd>P</kbd> <kbd>*</kbd></span></div>
+      <div><span>Focus one window</span><kbd>⌘⇧F</kbd></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it's built</h2>
+    <p class="lede">Mason has no network port. It reads what Claude Code already writes to disk and keeps its own data in one SQLite file. The only thing that leaves your Mac is the short summaries it asks Claude to write, and you can turn those off.</p>
+    <div class="stack">
+      <div><b>Electron</b><span>Desktop shell, menu bar, global hotkeys</span></div>
+      <div><b>React</b><span>The Quiet list UI</span></div>
+      <div><b>tmux</b><span>A private server keeps sessions alive</span></div>
+      <div><b>xterm.js + node-pty</b><span>Live terminals inside the app</span></div>
+      <div><b>SQLite</b><span>Notes, names, stars in <code>~/.mason</code></span></div>
+      <div><b>Claude Code hooks</b><span>"Waiting" events, <code>/pause</code>, <code>/stash</code></span></div>
+    </div>
+    <pre><span class="c"># reads</span>
+~/.claude/projects/**/*.jsonl   <span class="c">transcripts</span>
+~/.claude/sessions/*.json       <span class="c">running, busy, idle</span>
+<span class="c"># writes</span>
+~/.mason/mason.db               <span class="c">Mason's own data</span>
+~/.mason/events.jsonl           <span class="c">one line per hook event</span></pre>
+  </section>
+
+  <footer><span>Mason</span></footer>
+</div>
+<script>
+(() => {
+  const sel = document.getElementById('o-layout'), wins = document.getElementById('o-wins'), label = document.getElementById('o-layout-label');
+  const cols = { grid: 2, side: 4, stack: 1, one: 1 };
+  sel.addEventListener('change', () => {
+    wins.className = 'wins ' + sel.value;
+    wins.style.setProperty('--cols', cols[sel.value]);
+    label.textContent = sel.options[sel.selectedIndex].text;
+  });
+})();
+</script>
+
+</body>
+</html>
