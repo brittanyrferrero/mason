@@ -262,8 +262,14 @@ export function buildState(
       })
       continue
     }
-    const p = projectFor(h.cwd)
-    const r = h.resume ? (db.prepare('SELECT id, ai_title, first_prompt FROM sessions WHERE id = ?').get(h.resume) as Pick<Row, 'id' | 'ai_title' | 'first_prompt'> | undefined) : undefined
+    const r = h.resume
+      ? (db
+          .prepare('SELECT s.id, s.ai_title, s.first_prompt, s.project_id, p.name AS project FROM sessions s LEFT JOIN projects p ON p.id = s.project_id WHERE s.id = ?')
+          .get(h.resume) as (Pick<Row, 'id' | 'ai_title' | 'first_prompt'> & { project_id: number | null; project: string | null }) | undefined)
+      : undefined
+    // A shell resuming a conversation sits with that conversation's project (including one you dragged it to),
+    // not wherever its folder happens to be.
+    const p = r?.project_id && r.project ? { id: r.project_id, name: r.project } : projectFor(h.cwd)
     const seen = peek(h.name)
     add(p.id, p.name, {
       id: `tmux:${h.name}`,

@@ -1244,11 +1244,12 @@ export function App() {
                     {p.sessions.map((s) => (
                       <div
                         key={s.id}
-                        className={carrying?.id === prefId(s) ? 'carried' : undefined}
-                        draggable={hasPrefs(s) && renaming !== s.id && noting !== `s:${prefId(s)}`}
+                        className={carrying?.id === (prefId(s) ?? s.id) ? "carried" : undefined}
+                        draggable={(hasPrefs(s) || !!s.term) && renaming !== s.id && noting !== `s:${prefId(s)}`}
                         onDragStart={(e) => {
                           e.dataTransfer.effectAllowed = 'move'
-                          setCarrying({ id: prefId(s)!, from: p.id })
+                          e.dataTransfer.setData('application/x-mason-session', s.id)
+                          setCarrying({ id: prefId(s) ?? s.id, from: p.id }) // a terminal moves by its own tmux id
                         }}
                         onDragEnd={() => (setCarrying(null), setMovingTo(null))}
                       >

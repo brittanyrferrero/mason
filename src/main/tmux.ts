@@ -106,6 +106,17 @@ export function startTerminal(cwd: string, projectId: number): string {
   return name
 }
 
+// Dragging a plain terminal onto another project.
+export function setTerminalProject(name: string, projectId: number): boolean {
+  if (!NAME_RE.test(name)) return false
+  try {
+    tmux(['set-option', '-t', name, '@mason_project', String(projectId)])
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function startSession(cwd: string, resumeId?: string, briefPath?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
   const name = `ms-${randomBytes(4).toString('hex')}`

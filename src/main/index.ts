@@ -18,7 +18,7 @@ import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writeP
 import { buildState, searchPast } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
-import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, startSession, startTerminal, TMUX, unscroll } from './tmux'
+import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
 
 let db: DB
 let win: BrowserWindow | null = null
@@ -465,8 +465,15 @@ app.whenReady().then(() => {
   // Your own name for a project; empty goes back to its folder name.
   // Drag a session onto another project. Remembered, so following its folders never moves it back.
   ipcMain.handle('session:move-to', (e, id: unknown, projectId: unknown) => {
-    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof projectId !== 'number') return false
+    if (!trusted(e) || typeof id !== 'string' || typeof projectId !== 'number') return false
     if (!db.prepare('SELECT 1 FROM projects WHERE id = ?').get(projectId)) return false
+    // A plain terminal remembers its project on its tmux session.
+    if (id.startsWith('tmux:')) {
+      const ok = setTerminalProject(id.slice(5), projectId)
+      pushState()
+      return ok
+    }
+    if (!SESSION_ID_RE.test(id)) return false
     const r = db.prepare('UPDATE sessions SET project_id = ?, placed = 1 WHERE id = ?').run(projectId, id)
     pushState()
     return r.changes > 0
