@@ -67,3 +67,6 @@ Not doing: time cues ("working 40 min") and nudges about sessions waiting too lo
 - [x] **Peek** (Space, or the eye on hover): the session enlarged over the list, live, so you can answer it right there
 - [x] **Reopen after a restart:** if tmux is gone when Mason starts, the sessions that were running in it are resumed in their folders
 - [x] **Menu bar icon** (m.) with the waiting count; its menu lists what's waiting (click to Peek), Quick capture, Open Mason
+- [ ] **claude.ai projects, picked by hand.** Add a claude.ai project to Mason by pasting its link (nothing shows up on its own).
+      It sits under the Mason project you choose, or on its own, with its name and an optional note; click opens it in Claude.
+      There's no public claude.ai API, so Mason can't see the project's chats or files, only hold the link and your notes.
