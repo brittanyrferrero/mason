@@ -67,3 +67,8 @@ Not doing: time cues ("working 40 min") and nudges about sessions waiting too lo
 - [x] **Peek** (Space, or the eye on hover): the session enlarged over the list, live, so you can answer it right there
 - [x] **Reopen after a restart:** if tmux is gone when Mason starts, the sessions that were running in it are resumed in their folders
 - [x] **Menu bar icon** (m.) with the waiting count; its menu lists what's waiting (click to Peek), Quick capture, Open Mason
+- [ ] **claude.ai projects, picked by hand** ([plan](docs/claude-ai-projects.md)). You choose which claude.ai projects join Mason; nothing shows up on its own.
+  - [ ] **Links:** paste a project's link; it sits under a Mason project (or on its own) with a note, and opens in Claude on click
+  - [ ] **Connector:** a local MCP server in Mason, so chats in your claude.ai projects (desktop app) can stash to Mason and read your recaps
+  - [ ] **Send to claude.ai:** upload a handoff or note into a linked project's knowledge; if it can't, copy it and open the project for you
+  - [ ] **Import (maybe):** bring a project's past chats in from a claude.ai data export
