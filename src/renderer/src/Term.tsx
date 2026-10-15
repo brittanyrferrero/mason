@@ -40,17 +40,22 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
     t.open(host)
     t.attachCustomKeyEventHandler((e) => !(e.metaKey && APP_KEYS.has(e.code)))
     // The history lives in tmux, not in xterm, so the wheel scrolls tmux. Trackpads send many small pixel deltas.
+    // The wheel is caught before xterm sees it: after a resize xterm can hold a few spare lines above the screen, and
+    // if its own view scrolled into them they'd sit frozen at the top while tmux scrolled underneath.
     let wheel = 0
-    t.attachCustomWheelEventHandler((e) => {
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault() // the page itself must not scroll too
+      e.stopPropagation()
       wheel += e.deltaMode === 1 ? e.deltaY : e.deltaY / 20
       const lines = Math.trunc(wheel)
       if (lines) {
         wheel -= lines
         window.mason.scroll(client, lines)
       }
-      return false
-    })
+    }
+    host.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    // And should xterm's view ever move off the bottom anyway, put it straight back.
+    const pinned = t.onScroll(() => t.buffer.active.viewportY !== t.buffer.active.baseY && t.scrollToBottom())
     // Claude gets one row more than fits. That row sits just below the visible edge: when it holds Claude's footer,
     // the footer stays out of sight (its mode shows in Mason's title bar instead). When it holds anything else
     // (a permission prompt, a menu), the view shifts up a row so nothing that needs you is ever hidden.
@@ -70,6 +75,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
     const tuck = () => {
       frame = 0
       const buf = t.buffer.active
+      if (buf.viewportY !== buf.baseY) t.scrollToBottom()
       const last = buf.getLine(buf.viewportY + t.rows - 1)?.translateToString(true).trim() ?? ''
       const isFooter = FOOTER_RE.test(last)
       const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
@@ -112,6 +118,8 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
 
     return () => {
       ro.disconnect()
+      host.removeEventListener('wheel', onWheel, { capture: true })
+      pinned.dispose()
       cancelAnimationFrame(frame)
       parsed.dispose()
       input.dispose()
