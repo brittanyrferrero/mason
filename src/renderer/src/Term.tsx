@@ -57,8 +57,13 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
     const fitPlus = () => {
       const d = fit.proposeDimensions()
       if (!d || !Number.isFinite(d.rows) || !Number.isFinite(d.cols)) return
+      // The fit addon measures the host's width with its padding included (everything is border-box), so take that back off.
+      const cs = getComputedStyle(host)
+      const cellW = (t as unknown as { _core: { _renderService: { dimensions: { css: { cell: { width: number } } } } } })._core._renderService.dimensions.css.cell.width
+      const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+      const cols = Math.max(20, cellW ? Math.floor((host.clientWidth - pad) / cellW) : d.cols)
       const rows = Math.max(5, d.rows + 1)
-      if (t.cols !== d.cols || t.rows !== rows) t.resize(d.cols, rows)
+      if (t.cols !== cols || t.rows !== rows) t.resize(cols, rows)
     }
     let lastFooter = ''
     let frame = 0
