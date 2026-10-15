@@ -32,7 +32,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       lineHeight: 1.15,
       cursorBlink: true,
       macOptionIsMeta: true,
-      scrollback: 5000,
+      scrollback: 0, // the history lives in tmux, so xterm keeps none of its own to get stuck in
       theme: { background: '#1c1c1e', foreground: '#e5e5ea', cursor: '#e5e5ea', selectionBackground: '#48484a' }
     })
     const fit = new FitAddon()

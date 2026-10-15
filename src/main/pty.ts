@@ -27,9 +27,12 @@ export function attach(
     cwd: homedir(),
     env: cleanEnv() as Record<string, string>
   })
-  p.onData(onData)
+  // A client being replaced still says goodbye on its way out (leave full screen, paste mode off, "[lost tty]").
+  // That must not reach the view that replaced it, or its scrolling breaks, so only the current client is heard.
+  p.onData((d) => clients.get(name) === p && onData(d))
   p.onExit(() => {
-    if (clients.get(name) === p) clients.delete(name)
+    if (clients.get(name) !== p) return
+    clients.delete(name)
     onExit()
   })
   clients.set(name, p)
