@@ -15,7 +15,6 @@ const CONF_TEXT = `# Written by Mason. Invisible tmux: no status bar, no prefix 
 set -g status off
 set -g prefix None
 unbind-key -a
-set -g mouse off
 set -g history-limit 50000
 set -sg escape-time 0
 set -g focus-events on
@@ -24,6 +23,24 @@ set -ga terminal-overrides ",xterm-256color:Tc"
 set -g window-size latest
 set -g aggressive-resize on
 set -g set-titles off
+# The mouse selects text: drag to select (Mason scrolls when you drag past the top or bottom edge), and letting go
+# copies it to the clipboard. Double-click takes a word, triple-click a line. tmux's other mouse actions are removed
+# (its right-click menu can kill the session). If the program in the pane asks for the mouse itself, it gets it.
+set -g mouse on
+set -g set-clipboard off
+set -s copy-command 'pbcopy'
+unbind-key -T root -a
+bind-key -n MouseDown1Pane if -F '#{mouse_any_flag}' 'send -M'
+bind-key -n MouseUp1Pane if -F '#{mouse_any_flag}' 'send -M'
+bind-key -n MouseDrag1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -M'
+bind-key -n DoubleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-word ; run -d0.3 ; send -X copy-pipe-and-cancel'
+bind-key -n TripleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-line ; run -d0.3 ; send -X copy-pipe-and-cancel'
+bind-key -T copy-mode MouseDown1Pane send -X clear-selection
+bind-key -T copy-mode MouseDrag1Pane send -X begin-selection
+# At the bottom, copying also leaves the selection so Claude's output keeps flowing; scrolled back, it stays highlighted.
+bind-key -T copy-mode MouseDragEnd1Pane if -F '#{==:#{scroll_position},0}' 'send -X copy-pipe-and-cancel' 'send -X copy-pipe-no-clear'
+bind-key -T copy-mode DoubleClick1Pane send -X select-word \\; run -d0.3 \\; send -X copy-pipe-no-clear
+bind-key -T copy-mode TripleClick1Pane send -X select-line \\; run -d0.3 \\; send -X copy-pipe-no-clear
 `
 
 export const NAME_RE = /^ms-[0-9a-f]{8}$/
@@ -55,6 +72,8 @@ function tmux(args: string[]): string {
 
 export function initTmux(): void {
   writeFileSync(CONF, CONF_TEXT, { mode: 0o600 })
+  // A server that's already running (sessions outlive Mason) only read the config it started with.
+  if (TMUX) execFile(TMUX, [...baseArgs(), 'source-file', CONF], { timeout: 5000, env: cleanEnv() }, () => {})
 }
 
 // resume: the conversation Mason started this shell for, so it can be named before Claude is up (or after it exits).
@@ -152,6 +171,11 @@ export function scroll(name: string, lines: number): void {
   }
   scrolled.add(name)
   run(['copy-mode', '-e', '-t', name], move)
+}
+
+// A text selection made with the mouse puts the pane in copy mode too, so typing should leave it the same way.
+export function selecting(name: string): void {
+  if (NAME_RE.test(name)) scrolled.add(name)
 }
 
 // Typing while scrolled back jumps to the bottom first, like any terminal. Synchronous so the keystroke lands after.

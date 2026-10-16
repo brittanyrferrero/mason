@@ -18,7 +18,7 @@ import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writeP
 import { buildState, searchPast } from './state'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
-import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
+import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, selecting, SESSION_ID_RE, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
 
 let db: DB
 let win: BrowserWindow | null = null
@@ -655,11 +655,15 @@ app.whenReady().then(() => {
   })
   ipcMain.on('term:input', (e, client: unknown, data: unknown) => {
     if (!trusted(e) || typeof client !== 'string' || typeof data !== 'string' || !CLIENT_RE.test(client)) return
-    unscroll(sessionOf(client))
+    // Mouse and focus reports aren't typing: they mustn't jump a scrolled-back view to the bottom.
+    if (!/^(?:\x1b\[(?:<[\d;]+[Mm]|[IO]))+$/.test(data)) unscroll(sessionOf(client))
     term.write(client, data)
   })
   ipcMain.on('term:scroll', (e, client: unknown, lines: unknown) => {
     if (trusted(e) && typeof client === 'string' && CLIENT_RE.test(client)) scroll(sessionOf(client), Number(lines))
+  })
+  ipcMain.on('term:selecting', (e, client: unknown) => {
+    if (trusted(e) && typeof client === 'string' && CLIENT_RE.test(client)) selecting(sessionOf(client))
   })
   ipcMain.on('term:resize', (e, client: unknown, cols: unknown, rows: unknown) => {
     if (trusted(e) && typeof client === 'string') term.resize(client, Number(cols), Number(rows))

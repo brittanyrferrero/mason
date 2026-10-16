@@ -376,6 +376,8 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .term { overflow: hidden; }
 .term .xterm { height: auto; }
 .term .xterm-scrollable-element > .scrollbar { display: none; } /* scrolling is tmux's; xterm's own view stays put */
+.term { position: relative; }
+.term .copied { position: absolute; top: 8px; right: 10px; z-index: 5; font-size: 11px; color: #c7c7cc; background: #2c2c2e; border: 1px solid #3a3a3e; border-radius: 999px; padding: 0 8px; line-height: 18px; pointer-events: none; }
 .win-bar .mode-chip { flex: none; font-size: 11px; color: #8e8e93; border: 1px solid #3a3a3e; border-radius: 999px; padding: 0 7px; line-height: 16px; white-space: nowrap; }
 .win-bar .mode-chip.auto, .win-bar .mode-chip.bypass { color: #c7c7cc; }
 

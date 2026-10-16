@@ -1,4 +1,4 @@
-import { useEffect, useRef, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -22,6 +22,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
   const termRef = useRef<Terminal | null>(null)
   const footerCb = useRef(onFooter)
   footerCb.current = onFooter
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const host = el.current
@@ -32,6 +33,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       lineHeight: 1.15,
       cursorBlink: true,
       macOptionIsMeta: true,
+      macOptionClickForcesSelection: true, // ⌥-drag makes a plain on-screen selection for ⌘C
       scrollback: 0, // the history lives in tmux, so xterm keeps none of its own to get stuck in
       theme: { background: '#1c1c1e', foreground: '#e5e5ea', cursor: '#e5e5ea', selectionBackground: '#48484a' }
     })
@@ -54,6 +56,42 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       }
     }
     host.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    // Dragging selects text, and tmux does the selecting so it can run back through the history. Held past the top
+    // or bottom edge, the view keeps scrolling. Letting go copies; a small "Copied" shows so you know it worked.
+    let drag: { moved: boolean; dir: number; timer: number } | null = null
+    let copiedTimer = 0
+    const stopAuto = () => {
+      if (drag?.timer) clearInterval(drag.timer)
+      if (drag) drag.timer = drag.dir = 0
+    }
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 0 && !e.altKey && t.modes.mouseTrackingMode !== 'none') drag = { moved: false, dir: 0, timer: 0 }
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!drag) return
+      drag.moved = true
+      const r = host.getBoundingClientRect()
+      const dir = e.clientY < r.top + 6 ? -1 : e.clientY > r.bottom - 6 ? 1 : 0
+      if (dir === drag.dir) return
+      stopAuto()
+      if (dir) {
+        drag.dir = dir
+        drag.timer = window.setInterval(() => window.mason.scroll(client, dir), 110)
+      }
+    }
+    const onUp = (e: MouseEvent) => {
+      const d = drag
+      stopAuto()
+      drag = null
+      if (!d || !(d.moved || e.detail >= 2)) return
+      window.mason.selecting(client)
+      setCopied(true)
+      clearTimeout(copiedTimer)
+      copiedTimer = window.setTimeout(() => setCopied(false), 1400)
+    }
+    host.addEventListener('mousedown', onDown, true)
+    document.addEventListener('mousemove', onMove, true)
+    document.addEventListener('mouseup', onUp, true)
     // And should xterm's view ever move off the bottom anyway, put it straight back.
     const pinned = t.onScroll(() => t.buffer.active.viewportY !== t.buffer.active.baseY && t.scrollToBottom())
     // Claude gets one row more than fits. That row sits just below the visible edge: when it holds Claude's footer,
@@ -119,6 +157,11 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
     return () => {
       ro.disconnect()
       host.removeEventListener('wheel', onWheel, { capture: true })
+      host.removeEventListener('mousedown', onDown, true)
+      document.removeEventListener('mousemove', onMove, true)
+      document.removeEventListener('mouseup', onUp, true)
+      stopAuto()
+      clearTimeout(copiedTimer)
       pinned.dispose()
       cancelAnimationFrame(frame)
       parsed.dispose()
@@ -174,6 +217,8 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
         (e.preventDefault(), (e.dataTransfer.dropEffect = 'copy'))
       }
       onDrop={onDrop}
-    />
+    >
+      {copied && <span className="copied">Copied</span>}
+    </div>
   )
 }
