@@ -139,6 +139,19 @@ export function Term({
       const buf = t.buffer.active
       if (buf.viewportY !== buf.baseY) t.scrollToBottom()
       const row = (i: number) => buf.getLine(buf.viewportY + t.rows - 1 - i)?.translateToString(true).trim() ?? ''
+      // Scrolled back through the history (tmux shows its "[3/4245]" marker top right): the view holds still. The rows
+      // below are old text, so nothing needs shifting into sight, and resizing now would make the scroll jump.
+      if (!showRef.current && /\[\d+\/\d+\]$/.test(row(t.rows - 1))) {
+        for (const d of blanked) d.style.visibility = ''
+        blanked = []
+        const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
+        const rowH = screen ? screen.clientHeight / t.rows : 0
+        if (t.element && rowH) {
+          t.element.style.transform = ''
+          t.element.style.clipPath = `inset(0 0 ${rowH * extra}px 0)`
+        }
+        return
+      }
       // Everything below Claude's input box is its footer: the mode line, plus whatever it adds under it (an update
       // notice, a "/clear to save tokens" hint). The box's bottom edge is a row of ─.
       let at = -1
