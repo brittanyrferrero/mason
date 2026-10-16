@@ -1466,6 +1466,18 @@ export function App() {
               >
                 Notifications {state.notify ? 'on' : 'off'}
               </button>
+              <button
+                type="button"
+                aria-pressed={state.worktrees}
+                onClick={() => window.mason.setWorktrees(!state.worktrees)}
+                title={
+                  state.worktrees
+                    ? 'Worktrees are on: “+ New session” in a git project starts in its own copy of the repo on its own branch, so sessions running side by side never touch each other’s work. Cleared away once its pull request is merged. Click to turn off.'
+                    : 'Worktrees are off: new sessions start in the project’s own folder. Click to give each one its own copy of the repo.'
+                }
+              >
+                Worktrees {state.worktrees ? 'on' : 'off'}
+              </button>
             </span>
           )}
           <span className="theme" role="group" aria-label="Theme">
