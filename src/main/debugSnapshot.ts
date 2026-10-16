@@ -29,20 +29,43 @@ const MEASURE = `(() => {
   return { viewport: { w: innerWidth, h: innerHeight }, view: document.querySelector('.app')?.className, scrolledSideways, wider, wins }
 })()`
 
+// Cheap check for the "windows cut off on the left" bug: anything scrolled sideways, or a visible window that has
+// slid left of the page margin. Temporary, while that bug is being hunted.
+const LOOKS_SHIFTED = `(() => {
+  if (document.querySelector('.desk')?.hidden) return false
+  if ([...document.querySelectorAll('html, body, .app, .desk, .wins, .win, .win *')].some((e) => e.scrollLeft !== 0)) return true
+  return [...document.querySelectorAll('.win')].some((w) => w.offsetParent && w.getBoundingClientRect().left < 14)
+})()`
+
+async function save(win: BrowserWindow, base: string): Promise<void> {
+  try {
+    writeFileSync(join(DATA_DIR, `${base}.png`), (await win.webContents.capturePage()).toPNG(), { mode: 0o600 })
+    const measured = await win.webContents.executeJavaScript(MEASURE)
+    const size = win.getContentSize()
+    writeFileSync(join(DATA_DIR, `${base}.json`), JSON.stringify({ at: new Date().toISOString(), windowSize: size, ...measured }, null, 2), { mode: 0o600 })
+  } catch (e) {
+    writeFileSync(join(DATA_DIR, `${base}.json`), JSON.stringify({ error: String(e) }), { mode: 0o600 })
+  }
+}
+
 export function watchDebugRequests(getWin: () => BrowserWindow | null): void {
   const handle = async () => {
     if (!existsSync(REQUEST)) return
     rmSync(REQUEST, { force: true })
     const win = getWin()
-    if (!win || win.isDestroyed()) return
-    try {
-      writeFileSync(join(DATA_DIR, 'debug.png'), (await win.webContents.capturePage()).toPNG(), { mode: 0o600 })
-      const measured = await win.webContents.executeJavaScript(MEASURE)
-      writeFileSync(join(DATA_DIR, 'debug.json'), JSON.stringify({ at: new Date().toISOString(), ...measured }, null, 2), { mode: 0o600 })
-    } catch (e) {
-      writeFileSync(join(DATA_DIR, 'debug.json'), JSON.stringify({ error: String(e) }), { mode: 0o600 })
-    }
+    if (win && !win.isDestroyed()) await save(win, 'debug')
   }
+  let lastCatch = 0
+  setInterval(async () => {
+    const win = getWin()
+    if (!win || win.isDestroyed() || !win.isVisible() || Date.now() - lastCatch < 60_000) return
+    try {
+      if (await win.webContents.executeJavaScript(LOOKS_SHIFTED)) {
+        lastCatch = Date.now()
+        await save(win, 'caught-shift')
+      }
+    } catch {}
+  }, 2000)
   try {
     watch(DATA_DIR, (_ev, f) => f === 'debug-request' && handle())
   } catch {}
