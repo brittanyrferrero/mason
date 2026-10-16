@@ -9,6 +9,9 @@ const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'En
 // Claude's footer: the permission-mode line ("⏵⏵ auto mode on (shift+tab to cycle) · ← for agents") or the plain
 // "? for shortcuts" hint. Mason tucks it out of sight and shows the mode as a small chip in the window's title bar.
 const FOOTER_RE = /(?:⏵⏵|⏸|⏵)\s*\S.*\bon\b|shift\+tab to cycle|\? for shortcuts/
+// A line Claude sometimes adds under its footer ("✓ Update installed · Restart to update"). Every session shows
+// the same one, so it's tucked away with the footer rather than repeated in every window.
+const NOTICE_RE = /update installed|restart to update|update available/i
 const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mode\s+)?on\b/i.exec(line)?.[1].replace(/\s*mode$/i, '') ?? null
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
@@ -94,9 +97,11 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
     document.addEventListener('mouseup', onUp, true)
     // And should xterm's view ever move off the bottom anyway, put it straight back.
     const pinned = t.onScroll(() => t.buffer.active.viewportY !== t.buffer.active.baseY && t.scrollToBottom())
-    // Claude gets one row more than fits. That row sits just below the visible edge: when it holds Claude's footer,
-    // the footer stays out of sight (its mode shows in Mason's title bar instead). When it holds anything else
-    // (a permission prompt, a menu), the view shifts up a row so nothing that needs you is ever hidden.
+    // Claude gets one row more than fits (up to three while its footer has a notice line under it). Those rows sit just below
+    // the visible edge: when they hold Claude's footer, it stays out of sight (its mode shows in Mason's title bar
+    // instead). When they hold anything else (a permission prompt, a menu), the view shifts up so nothing that needs
+    // you is ever hidden.
+    let extra = 1
     const fitPlus = () => {
       const d = fit.proposeDimensions()
       if (!d || !Number.isFinite(d.rows) || !Number.isFinite(d.cols)) return
@@ -105,7 +110,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       const cellW = (t as unknown as { _core: { _renderService: { dimensions: { css: { cell: { width: number } } } } } })._core._renderService.dimensions.css.cell.width
       const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
       const cols = Math.max(20, cellW ? Math.floor((host.clientWidth - pad) / cellW) : d.cols)
-      const rows = Math.max(5, d.rows + 1)
+      const rows = Math.max(5, d.rows + extra)
       if (t.cols !== cols || t.rows !== rows) t.resize(cols, rows)
     }
     let lastFooter = ''
@@ -114,14 +119,29 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       frame = 0
       const buf = t.buffer.active
       if (buf.viewportY !== buf.baseY) t.scrollToBottom()
-      const last = buf.getLine(buf.viewportY + t.rows - 1)?.translateToString(true).trim() ?? ''
-      const isFooter = FOOTER_RE.test(last)
+      const row = (i: number) => buf.getLine(buf.viewportY + t.rows - 1 - i)?.translateToString(true).trim() ?? ''
+      // The footer is the bottom row, or sits just above a notice line and/or a blank row.
+      let at = -1
+      for (let k = 0; k < 3 && at < 0; k++) {
+        if (FOOTER_RE.test(row(k))) at = k
+        else if (row(k) && !NOTICE_RE.test(row(k))) break
+      }
+      const isFooter = at >= 0
+      const last = isFooter ? row(at) : ''
+      const want = isFooter ? at + 1 : extra
+      if (want !== extra) {
+        extra = want
+        try {
+          fitPlus()
+        } catch {}
+      }
       const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
       const rowH = screen ? screen.clientHeight / t.rows : 0
-      // Exactly one row is out of sight: the bottom one (the footer), or, shifted up, the top one.
+      // Exactly `extra` rows are out of sight: the bottom ones (the footer), or, shifted up, the top ones.
+      const hide = extra
       if (t.element && rowH) {
-        t.element.style.transform = isFooter ? '' : `translateY(-${rowH}px)`
-        t.element.style.clipPath = isFooter ? `inset(0 0 ${rowH}px 0)` : `inset(${rowH}px 0 0 0)`
+        t.element.style.transform = isFooter ? '' : `translateY(-${rowH * hide}px)`
+        t.element.style.clipPath = isFooter ? `inset(0 0 ${rowH * hide}px 0)` : `inset(${rowH * hide}px 0 0 0)`
       }
       const key = isFooter ? last : ''
       if (key !== lastFooter) {
