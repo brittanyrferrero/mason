@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import type { AppState, FoundView, SessionView } from '../../main/state'
 import type { MasonApi } from '../../preload'
 import { Term, type Footer } from './Term'
+import { useHoverToType } from './hoverToType'
 
 declare global {
   interface Window {
@@ -520,6 +521,12 @@ export function App() {
     return () => clearInterval(t)
   }, [])
   const touch = (host: string) => touched.current.set(host, Date.now())
+  // Experiment (may go): rest on a window for a moment, then start typing, and it becomes the active one.
+  const armed = useHoverToType(view === 'open', focusHost, (host) => {
+    touch(host)
+    setFocusHost(host)
+    setTick((t) => t + 1)
+  })
   const resting = (w: (typeof windows)[number]) => !w.needs && !w.working && clock - Math.max(w.last, touched.current.get(w.host) ?? 0) > 10 * 60_000
   // Recent: the window you just clicked away from keeps a faint edge for five minutes, a breadcrumb back to it.
   const [left, setLeft] = useState<Record<string, number>>({})
@@ -900,7 +907,7 @@ export function App() {
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''} ${n > 1 && !one && !focused && Date.now() - (left[w.host] ?? 0) < 5 * 60_000 ? 'recent' : ''} ${n > 1 && !one && !focused && resting(w) ? 'resting' : ''}`}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${armed === w.host ? 'armed' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''} ${n > 1 && !one && !focused && Date.now() - (left[w.host] ?? 0) < 5 * 60_000 ? 'recent' : ''} ${n > 1 && !one && !focused && resting(w) ? 'resting' : ''}`}
                 onFocusCapture={() => (touch(w.host), setFocusHost(w.host))}
                 onKeyDownCapture={() => touch(w.host)}
                 onDragOver={(e) => {
