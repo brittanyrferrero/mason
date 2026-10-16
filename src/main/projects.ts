@@ -39,7 +39,7 @@ export function workProjectIdFor(db: DB, cwd: string): number | null {
   const top = rel?.split('/')[0]
   if (!top || top.startsWith('.') || NOT_PROJECTS.has(top)) return null
   if (!existsSync(cwd)) {
-    const parent = db.prepare(`SELECT id FROM projects WHERE ? LIKE root || '-%' ORDER BY length(root) DESC LIMIT 1`).get(cwd) as { id: number } | undefined
+    const parent = db.prepare(`SELECT id FROM projects WHERE ? LIKE root || '-%' OR ? LIKE root || '/.claude/worktrees/%' ORDER BY length(root) DESC LIMIT 1`).get(cwd, cwd) as { id: number } | undefined
     return parent?.id ?? null
   }
   return projectIdFor(db, cwd)
@@ -55,8 +55,8 @@ export function projectIdFor(db: DB, cwd: string): number {
   // Fold it into the existing project whose folder name it extends.
   if (!existsSync(cwd)) {
     const parent = db
-      .prepare(`SELECT id, root FROM projects WHERE ? LIKE root || '-%' ORDER BY length(root) DESC LIMIT 1`)
-      .get(cwd) as { id: number } | undefined
+      .prepare(`SELECT id, root FROM projects WHERE ? LIKE root || '-%' OR ? LIKE root || '/.claude/worktrees/%' ORDER BY length(root) DESC LIMIT 1`)
+      .get(cwd, cwd) as { id: number } | undefined
     if (parent) {
       cache.set(cwd, parent.id)
       return parent.id

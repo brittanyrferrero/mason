@@ -5,6 +5,7 @@ import type { LiveInfo } from './live'
 import { readHandoffs } from './handoff'
 import { readSummaries, summariesOn } from './summarize'
 import { peek, type Hosted } from './tmux'
+import { worktreesOn } from './worktrees'
 
 export type SessionStatus = 'working' | 'needs' | 'idle'
 
@@ -47,6 +48,7 @@ export type AppState = {
   doneToday: { id: string; title: string; project: string; what: string }[]
   canHost: boolean
   summaries: boolean
+  worktrees: boolean // new sessions in a git project start in their own worktree
   notify: boolean // a Mac notification when a session starts waiting while Mason is in the background
   scratch: string
 }
@@ -314,5 +316,5 @@ export function buildState(
   for (const p of projects) p.kept = keptIds.has(p.id) || undefined
   for (const p of projects) p.myNote = myNotes.get(`p:${p.id}`)
   const notify = (db.prepare("SELECT value FROM settings WHERE key = 'notify'").get() as { value: string } | undefined)?.value !== 'off'
-  return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), notify, scratch: myNotes.get('scratch') ?? '' }
+  return { projects, paused, saved, doneToday, canHost, summaries: summariesOn(db), worktrees: worktreesOn(db), notify, scratch: myNotes.get('scratch') ?? '' }
 }

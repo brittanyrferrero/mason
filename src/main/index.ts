@@ -16,6 +16,7 @@ import * as term from './pty'
 import { CLIENT_RE, sessionOf } from './pty'
 import { briefFile, editHandoff, HANDOFF_DIR, readHandoffs, takeHandoffs, writePauseScript } from './handoff'
 import { buildState, searchPast } from './state'
+import { isGitRoot, setWorktrees, tidyWorktrees, worktreesOn } from './worktrees'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
 import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, SESSION_ID_RE, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
@@ -389,7 +390,7 @@ app.whenReady().then(() => {
     if (!trusted(e) || typeof projectId !== 'number') return { error: 'bad request' }
     const p = db.prepare('SELECT root FROM projects WHERE id = ?').get(projectId) as { root: string } | undefined
     if (!p || !existsSync(p.root)) return { error: 'That project folder no longer exists.' }
-    const host = startSession(p.root)
+    const host = startSession(p.root, undefined, undefined, worktreesOn(db) && isGitRoot(p.root))
     refreshSoon(false)
     return { host }
   })
@@ -559,6 +560,12 @@ app.whenReady().then(() => {
     const host = spinOff(h.cwd, sid, from, thought.trim().slice(0, 10_000))
     return host ? { host } : { error: 'That folder no longer exists.' }
   })
+  ipcMain.handle('worktrees:set', (e, on: unknown) => {
+    if (!trusted(e) || typeof on !== 'boolean') return false
+    setWorktrees(db, on)
+    pushState()
+    return true
+  })
   ipcMain.handle('notify:set', (e, on: unknown) => {
     if (!trusted(e) || typeof on !== 'boolean') return false
     db.prepare("INSERT INTO settings (key, value) VALUES ('notify', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(on ? 'on' : 'off')
@@ -684,6 +691,13 @@ app.whenReady().then(() => {
   } catch {}
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)
+  // Worktrees whose work is merged (or never started) are cleared away, never one with anything running or unsaved.
+  const tidy = () => {
+    const inUse = [...[...readLive().values()].flatMap((l) => (l.cwd ? [l.cwd] : [])), ...listHosted().map((h) => h.cwd)]
+    tidyWorktrees(db, inUse).catch(() => 0)
+  }
+  setTimeout(tidy, 30_000)
+  setInterval(tidy, 15 * 60_000)
   // Summaries catch up quietly in the background, one session at a time.
   const summarize = () => {
     const busy = new Set([...readLive()].filter(([, l]) => l.status === 'working').map(([id]) => id))

@@ -52,6 +52,7 @@ behind a hotkey). Mason keeps that core and adds memory and focus.
 - [x] **Recent edge** (Open tab). The window you just clicked away from keeps a really faint white edge for five minutes
 - [x] **Resting** (Open tab). A window untouched for 10 minutes, by you or Claude, gets a quieter title bar; working and waiting ones never do
 - [x] **Move a session to another project**: drag its row onto the project in the Projects tab. It stays there; following its folders never moves it back
+- [x] **A worktree per session** (on by default, "Worktrees on/off" at the bottom). "+ New session" in a git project starts `claude --worktree`: its own copy of the repo in `.claude/worktrees/` on its own branch, so parallel PR sessions never touch each other. Claude removes an untouched one on exit; Mason clears one away once its PR is merged, never with anything running or uncommitted in it. Other folders start plain
       into the grid, stack, or whatever layout was there. Nothing about the layout changes.
 - [x] **Star.** A quiet marker on sessions you care about (*); doesn't move anything.
 - [x] **Done today.** A small list of what got finished today, from ended sessions and their summaries.
