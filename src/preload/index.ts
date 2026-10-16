@@ -34,6 +34,7 @@ const api = {
   setSummaries: (on: boolean): Promise<boolean> => ipcRenderer.invoke('summaries:set', on),
   setWorktrees: (on: boolean): Promise<boolean> => ipcRenderer.invoke('worktrees:set', on),
   setNotify: (on: boolean): Promise<boolean> => ipcRenderer.invoke('notify:set', on),
+  setClaudeAuto: (on: boolean): Promise<boolean> => ipcRenderer.invoke('claudeAuto:set', on),
   spinoff: (fromHost: string, thought: string): Promise<HostResult> => ipcRenderer.invoke('session:spinoff', fromHost, thought),
   // A spin-off started (from /spinoff in Claude, or ⌘⇧N): open its window beside the one it came from.
   onSpunoff: (cb: (host: string, from: string | null) => void) => {

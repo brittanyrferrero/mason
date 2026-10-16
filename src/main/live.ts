@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 export const CLAUDE_SESSIONS = join(homedir(), '.claude', 'sessions')
 
-type Copy = { pid: number; status: 'working' | 'idle'; tty?: string; tmux?: string }
+type Copy = { pid: number; status: 'working' | 'idle'; tty?: string; tmux?: string; version?: string; since?: number }
 // One running conversation. `extra` holds any further copies of it (the same conversation resumed in two places).
 export type LiveInfo = Copy & { name?: string; cwd?: string; copies: number; extra: Copy[] }
 
@@ -39,7 +39,7 @@ export function readLive(): Map<string, LiveInfo> {
       if (typeof d.entrypoint === 'string' && d.entrypoint.startsWith('sdk')) continue
       // The same conversation can be resumed in two places at once; count the copies so nothing acts on it blindly.
       // Claude records its tmux pane ("ms-1234abcd:@6.%6"), which names the Mason shell it's in.
-      const copy: Copy = { pid: d.pid, status: d.status === 'busy' ? 'working' : 'idle', tmux: typeof d.tmux === 'string' ? d.tmux.split(':')[0] : undefined }
+      const copy: Copy = { pid: d.pid, status: d.status === 'busy' ? 'working' : 'idle', tmux: typeof d.tmux === 'string' ? d.tmux.split(':')[0] : undefined, version: typeof d.version === 'string' ? d.version : undefined, since: typeof d.statusUpdatedAt === 'number' ? d.statusUpdatedAt : undefined }
       const prev = live.get(d.sessionId)
       if (prev) prev.copies++, prev.extra.push(copy)
       else live.set(d.sessionId, { ...copy, name: d.name, cwd: d.cwd, copies: 1, extra: [] })

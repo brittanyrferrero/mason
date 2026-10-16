@@ -187,6 +187,23 @@ export function unscroll(name: string): void {
   } catch {} // already back at the bottom
 }
 
+// For restarting a session onto a new Claude: read the screen, type a command, put a draft back.
+export function capturePane(name: string, colors = false): string {
+  if (!NAME_RE.test(name)) throw new Error('bad session name')
+  return tmux(['capture-pane', '-p', '-J', ...(colors ? ['-e'] : []), '-t', name])
+}
+export function sendLine(name: string, text: string): void {
+  if (!NAME_RE.test(name)) return
+  tmux(['send-keys', '-t', name, '-l', text])
+  tmux(['send-keys', '-t', name, 'Enter'])
+}
+// A bracketed paste (-p), so line breaks land in Claude's prompt instead of sending it.
+export function pasteText(name: string, text: string): void {
+  if (!NAME_RE.test(name) || !text) return
+  tmux(['set-buffer', '-b', 'mason-draft', '--', text])
+  tmux(['paste-buffer', '-p', '-d', '-b', 'mason-draft', '-t', name])
+}
+
 export function endSession(name: string): void {
   if (!NAME_RE.test(name)) return
   try {

@@ -51,6 +51,8 @@ export type AppState = {
   summaries: boolean
   worktrees: boolean // new sessions in a git project start in their own worktree
   notify: boolean // a Mac notification when a session starts waiting while Mason is in the background
+  claudeUpdate?: { latest: string; behindHere: number; behindTerminal: number } | null // a newer Claude Code than some sessions run (index.ts)
+  claudeAuto?: boolean // restart idle sessions onto a new Claude Code
   scratch: string
 }
 

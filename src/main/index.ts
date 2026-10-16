@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { watchDebugRequests } from './debugSnapshot'
+import { autoUpdateOn, noteTyping, startClaudeUpdater, updateView } from './claudeUpdates'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -44,7 +45,7 @@ function state() {
   pruneNeeds(new Set(live.keys()))
   // `--fake-update` (developer snapshots only) shows the Update button without a real update.
   const update = DEV_CHECK && process.argv.includes('--fake-update') ? { count: 2, notes: ['Peek, menu bar icon, and reopen after restart', 'Quick capture and /stash'] } : updateInfo()
-  return { ...buildState(db, live, needs, listHosted(), projectFor, !!TMUX), update }
+  return { ...buildState(db, live, needs, listHosted(), projectFor, !!TMUX), update, claudeUpdate: updateView(live), claudeAuto: autoUpdateOn(db) }
 }
 
 function send(channel: string, ...args: unknown[]): void {
@@ -568,6 +569,12 @@ app.whenReady().then(() => {
     pushState()
     return true
   })
+  ipcMain.handle('claudeAuto:set', (e, on: unknown) => {
+    if (!trusted(e) || typeof on !== 'boolean') return false
+    db.prepare("INSERT INTO settings (key, value) VALUES ('claudeAutoUpdate', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(on ? 'on' : 'off')
+    pushState()
+    return true
+  })
   ipcMain.handle('notify:set', (e, on: unknown) => {
     if (!trusted(e) || typeof on !== 'boolean') return false
     db.prepare("INSERT INTO settings (key, value) VALUES ('notify', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(on ? 'on' : 'off')
@@ -665,7 +672,7 @@ app.whenReady().then(() => {
   ipcMain.on('term:input', (e, client: unknown, data: unknown) => {
     if (!trusted(e) || typeof client !== 'string' || typeof data !== 'string' || !CLIENT_RE.test(client)) return
     // Mouse and focus reports aren't typing: they mustn't jump a scrolled-back view to the bottom.
-    if (!/^(?:\x1b\[(?:<[\d;]+[Mm]|[IO]))+$/.test(data)) unscroll(sessionOf(client))
+    if (!/^(?:\x1b\[(?:<[\d;]+[Mm]|[IO]))+$/.test(data)) unscroll(sessionOf(client)), noteTyping(sessionOf(client))
     term.write(client, data)
   })
   ipcMain.on('term:scroll', (e, client: unknown, lines: unknown) => {
@@ -697,6 +704,8 @@ app.whenReady().then(() => {
   } catch {}
   // `touch ~/.mason/debug-request` saves a picture and layout measurements of Mason's window (see debugSnapshot.ts).
   watchDebugRequests(() => win)
+  // Sessions move onto a newly installed Claude by themselves once they're idle (see claudeUpdates.ts).
+  startClaudeUpdater({ db, readLive, needs: readEvents, notice: (msg) => send('mason:notice', msg), changed: () => refreshSoon(false) })
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)
   // Worktrees whose work is merged (or never started) are cleared away, never one with anything running or unsaved.

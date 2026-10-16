@@ -801,6 +801,24 @@ export function App() {
             <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
           </p>
         )}
+        {/* One quiet line for a new Claude Code, instead of a notice in every window. */}
+        {state?.claudeUpdate && (
+          <span
+            className="claude-update"
+            title={
+              state.claudeAuto
+                ? `Claude ${state.claudeUpdate.latest} is installed. Mason restarts its sessions onto it once each has been idle for 2 minutes, keeping the conversation and anything you'd typed in the prompt.` +
+                  (state.claudeUpdate.behindTerminal ? ` Sessions in Terminal need restarting there.` : '')
+                : `Claude ${state.claudeUpdate.latest} is installed. A session uses it once you end and resume it. Turn on “Claude updates” below to have Mason do it when sessions are idle.`
+            }
+          >
+            new Claude ·{' '}
+            {state.claudeAuto && state.claudeUpdate.behindHere
+              ? `${state.claudeUpdate.behindHere} switch over when idle`
+              : `${state.claudeUpdate.behindHere + state.claudeUpdate.behindTerminal} to restart`}
+            {state.claudeAuto && state.claudeUpdate.behindTerminal ? ` · ${state.claudeUpdate.behindTerminal} in Terminal` : ''}
+          </span>
+        )}
         {state?.update && (
           <button
             className="update-btn"
@@ -1000,11 +1018,6 @@ export function App() {
                   {w.model && (
                     <span className="mode-chip model-chip" title={`Model: ${w.model}`}>
                       {modelName(w.model)}
-                    </span>
-                  )}
-                  {footers[w.host]?.notice && (
-                    <span className="mode-chip notice-chip" title={`${footers[w.host]!.notice}. Claude Code was updated; a session uses the new version once you end and resume it.`}>
-                      update
                     </span>
                   )}
                   <span className="bar-gap" />
@@ -1513,6 +1526,18 @@ export function App() {
                 title={state.notify ? 'A Mac notification when a session starts waiting on you while Mason is in the background. Click to turn off.' : 'Notifications are off. Click to get one when a session starts waiting on you.'}
               >
                 Notifications {state.notify ? 'on' : 'off'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={state.claudeAuto}
+                onClick={() => window.mason.setClaudeAuto(!state.claudeAuto)}
+                title={
+                  state.claudeAuto
+                    ? 'When Claude Code updates, Mason restarts its sessions onto the new version once each has been idle for 2 minutes. The conversation carries on, and anything typed in the prompt is put back (a copy is kept in ~/.mason/drafts). Click to turn off.'
+                    : 'Off: sessions keep the old Claude until you end and resume them. Click to have Mason do it when they’re idle.'
+                }
+              >
+                Claude updates {state.claudeAuto ? 'automatic' : 'manual'}
               </button>
               <button
                 type="button"
