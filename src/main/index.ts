@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { watchDebugRequests } from './debugSnapshot'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -694,6 +695,8 @@ app.whenReady().then(() => {
   try {
     watch(HANDOFF_DIR, (_ev, f) => f?.endsWith('.handoff') && setTimeout(takePauses, 300))
   } catch {}
+  // `touch ~/.mason/debug-request` saves a picture and layout measurements of Mason's window (see debugSnapshot.ts).
+  watchDebugRequests(() => win)
   // A crashed Claude leaves its status file behind; a slow poll notices the process is gone.
   setInterval(() => refreshSoon(false), 10_000)
   // Worktrees whose work is merged (or never started) are cleared away, never one with anything running or unsaved.
