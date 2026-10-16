@@ -19,12 +19,30 @@ const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mod
 // `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
 export type Footer = { mode: string | null; text: string; notice?: string } | null
 
-export function Term({ name, focus, tick, peek = false, onFooter }: { name: string; focus: boolean; tick: number; peek?: boolean; onFooter?: (f: Footer) => void }) {
+// `showFooter` leaves Claude's footer in view instead (the twirl under each window).
+export function Term({
+  name,
+  focus,
+  tick,
+  peek = false,
+  showFooter = false,
+  onFooter
+}: {
+  name: string
+  focus: boolean
+  tick: number
+  peek?: boolean
+  showFooter?: boolean
+  onFooter?: (f: Footer) => void
+}) {
   const client = peek ? `${name}~peek` : name
   const el = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const footerCb = useRef(onFooter)
   footerCb.current = onFooter
+  const showRef = useRef(showFooter)
+  showRef.current = showFooter
+  const retuck = useRef<() => void>(undefined)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -121,28 +139,43 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       const buf = t.buffer.active
       if (buf.viewportY !== buf.baseY) t.scrollToBottom()
       const row = (i: number) => buf.getLine(buf.viewportY + t.rows - 1 - i)?.translateToString(true).trim() ?? ''
-      // The footer is the bottom row, or sits above a notice line and/or blank rows. Near the bottom it's kept just out of
-      // sight; higher up (a conversation that doesn't fill the window yet) its rows are blanked where they are.
+      // Everything below Claude's input box is its footer: the mode line, plus whatever it adds under it (an update
+      // notice, a "/clear to save tokens" hint). The box's bottom edge is a row of ─.
       let at = -1
       let notice = ''
-      for (let k = 0; k < t.rows - 1 && at < 0; k++) {
+      let modeLine = ''
+      for (let k = 1; k < Math.min(12, t.rows); k++) {
+        if (!/^─{8,}$/.test(row(k))) continue
+        const below = Array.from({ length: k }, (_, i) => row(i))
+        modeLine = below.find((r) => FOOTER_RE.test(r)) ?? ''
+        if (modeLine) {
+          at = k - 1
+          notice = below.find((r) => NOTICE_RE.test(r)) ?? ''
+        }
+        break
+      }
+      // No input box in sight (a menu or prompt replaces it): the footer can still sit at the very bottom.
+      // Near the bottom the footer is kept just out of sight; higher up (a conversation that doesn't fill the window
+      // yet) its rows are blanked where they are.
+      for (let k = 0; at < 0 && k < 3; k++) {
         const r = row(k)
-        if (FOOTER_RE.test(r)) at = k
+        if (FOOTER_RE.test(r)) (at = k), (modeLine = r)
         else if (NOTICE_RE.test(r)) notice = r
         else if (r) break
       }
-      const isFooter = at >= 0 && at <= 2
-      const last = at >= 0 ? row(at) : ''
+      const isFooter = at >= 0 && at <= 4
+      const last = at >= 0 ? modeLine : ''
       for (const d of blanked) d.style.visibility = ''
       blanked = []
-      if (at > 2) {
+      const show = showRef.current
+      if (at > 4 && !show) {
         const divs = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div')
         for (let k = 0; k <= at; k++) {
           const d = divs?.[t.rows - 1 - k]
           if (d && row(k)) (d.style.visibility = 'hidden'), blanked.push(d)
         }
       }
-      const want = isFooter ? at + 1 : extra
+      const want = show ? 0 : isFooter ? at + 1 : extra || 1
       if (want !== extra) {
         extra = want
         try {
@@ -154,7 +187,8 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       // Exactly `extra` rows are out of sight: the bottom ones (the footer), or, shifted up, the top ones.
       // (Below a footer higher up there's only blank space, so the bottom rows can go without shifting anything.)
       const atBottom = at >= 0
-      if (t.element && rowH) {
+      if (t.element && show) t.element.style.transform = t.element.style.clipPath = ''
+      else if (t.element && rowH) {
         t.element.style.transform = atBottom ? '' : `translateY(-${rowH * extra}px)`
         t.element.style.clipPath = atBottom ? `inset(0 0 ${rowH * extra}px 0)` : `inset(${rowH * extra}px 0 0 0)`
       }
@@ -165,6 +199,7 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       }
     }
     const soon = () => frame || (frame = requestAnimationFrame(tuck))
+    retuck.current = soon
     const parsed = t.onWriteParsed(soon)
     try {
       fitPlus()
@@ -209,6 +244,10 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       termRef.current = null
     }
   }, [client])
+
+  useEffect(() => {
+    retuck.current?.()
+  }, [showFooter])
 
   useEffect(() => {
     if (focus) termRef.current?.focus()

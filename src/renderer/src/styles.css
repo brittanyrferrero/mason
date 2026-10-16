@@ -406,3 +406,9 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .win.armed .win-bar::after { content: 'type to switch'; flex: none; font-size: 11px; color: #e5e5ea; background: rgba(255, 255, 255, 0.1); border-radius: 999px; padding: 1px 8px; margin-left: 8px; animation: armed-in 0.4s ease both; }
 @keyframes armed-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .win.armed .win-bar::after { animation: none; } }
+
+/* The twirl under each window: shows Claude's footer (mode line, hints, notices), tucked away by default. */
+.footer-twirl { position: absolute; right: 8px; bottom: 2px; z-index: 6; border: 0; background: none; color: #636366; padding: 0 4px; line-height: 0; border-radius: 5px; cursor: pointer; }
+.footer-twirl svg { width: 13px; height: 13px; transform: rotate(180deg); transition: transform 0.15s; }
+.footer-twirl.open svg { transform: none; }
+.footer-twirl:hover { color: #d1d1d6; background: rgba(255, 255, 255, 0.08); }
