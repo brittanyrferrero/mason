@@ -9,15 +9,15 @@ const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'En
 // Claude's footer: the permission-mode line ("⏵⏵ auto mode on (shift+tab to cycle) · ← for agents") or the plain
 // "? for shortcuts" hint. Mason tucks it out of sight and shows the mode as a small chip in the window's title bar.
 const FOOTER_RE = /(?:⏵⏵|⏸|⏵)\s*\S.*\bon\b|shift\+tab to cycle|\? for shortcuts/
-// A line Claude sometimes adds under its footer ("✓ Update installed · Restart to update"). Every session shows
-// the same one, so it's tucked away with the footer rather than repeated in every window.
+// A line Claude sometimes adds under its footer ("✓ Update installed · Restart to update"). It's tucked away with the
+// footer and shown as a small chip in the title bar instead.
 const NOTICE_RE = /update installed|restart to update|update available/i
 const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mode\s+)?on\b/i.exec(line)?.[1].replace(/\s*mode$/i, '') ?? null
 
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
 // `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
-export type Footer = { mode: string | null; text: string } | null
+export type Footer = { mode: string | null; text: string; notice?: string } | null
 
 export function Term({ name, focus, tick, peek = false, onFooter }: { name: string; focus: boolean; tick: number; peek?: boolean; onFooter?: (f: Footer) => void }) {
   const client = peek ? `${name}~peek` : name
@@ -114,20 +114,34 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       if (t.cols !== cols || t.rows !== rows) t.resize(cols, rows)
     }
     let lastFooter = ''
+    let blanked: HTMLElement[] = []
     let frame = 0
     const tuck = () => {
       frame = 0
       const buf = t.buffer.active
       if (buf.viewportY !== buf.baseY) t.scrollToBottom()
       const row = (i: number) => buf.getLine(buf.viewportY + t.rows - 1 - i)?.translateToString(true).trim() ?? ''
-      // The footer is the bottom row, or sits just above a notice line and/or a blank row.
+      // The footer is the bottom row, or sits above a notice line and/or blank rows. Near the bottom it's kept just out of
+      // sight; higher up (a conversation that doesn't fill the window yet) its rows are blanked where they are.
       let at = -1
-      for (let k = 0; k < 3 && at < 0; k++) {
-        if (FOOTER_RE.test(row(k))) at = k
-        else if (row(k) && !NOTICE_RE.test(row(k))) break
+      let notice = ''
+      for (let k = 0; k < t.rows - 1 && at < 0; k++) {
+        const r = row(k)
+        if (FOOTER_RE.test(r)) at = k
+        else if (NOTICE_RE.test(r)) notice = r
+        else if (r) break
       }
-      const isFooter = at >= 0
-      const last = isFooter ? row(at) : ''
+      const isFooter = at >= 0 && at <= 2
+      const last = at >= 0 ? row(at) : ''
+      for (const d of blanked) d.style.visibility = ''
+      blanked = []
+      if (at > 2) {
+        const divs = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div')
+        for (let k = 0; k <= at; k++) {
+          const d = divs?.[t.rows - 1 - k]
+          if (d && row(k)) (d.style.visibility = 'hidden'), blanked.push(d)
+        }
+      }
       const want = isFooter ? at + 1 : extra
       if (want !== extra) {
         extra = want
@@ -138,15 +152,16 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
       const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
       const rowH = screen ? screen.clientHeight / t.rows : 0
       // Exactly `extra` rows are out of sight: the bottom ones (the footer), or, shifted up, the top ones.
-      const hide = extra
+      // (Below a footer higher up there's only blank space, so the bottom rows can go without shifting anything.)
+      const atBottom = at >= 0
       if (t.element && rowH) {
-        t.element.style.transform = isFooter ? '' : `translateY(-${rowH * hide}px)`
-        t.element.style.clipPath = isFooter ? `inset(0 0 ${rowH * hide}px 0)` : `inset(${rowH * hide}px 0 0 0)`
+        t.element.style.transform = atBottom ? '' : `translateY(-${rowH * extra}px)`
+        t.element.style.clipPath = atBottom ? `inset(0 0 ${rowH * extra}px 0)` : `inset(${rowH * extra}px 0 0 0)`
       }
-      const key = isFooter ? last : ''
+      const key = last ? `${last}\n${notice}` : ''
       if (key !== lastFooter) {
         lastFooter = key
-        footerCb.current?.(isFooter ? { mode: modeOf(last), text: last } : null)
+        footerCb.current?.(last ? { mode: modeOf(last), text: last, notice: notice || undefined } : null)
       }
     }
     const soon = () => frame || (frame = requestAnimationFrame(tuck))

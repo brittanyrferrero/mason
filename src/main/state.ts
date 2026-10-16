@@ -24,6 +24,7 @@ export type SessionView = {
   focus?: string // from the summary: what it's on right now, shown after the title ("Mason design · buttons")
   next?: string // from the summary: the very next step
   myNote?: string
+  model?: string // the model Claude last answered with, e.g. "claude-opus-5-5"
 }
 
 export type PausedView = {
@@ -87,6 +88,7 @@ type Row = {
   last_text: string | null
   last_prompt: string | null
   last_activity: number | null
+  model?: string | null
 }
 
 export type FoundView = { id: string; title: string; project: string; pickUp: string; lastActivity: number; starred: boolean }
@@ -137,7 +139,7 @@ export function buildState(
 ): AppState {
   const rows = db
     .prepare(
-      `SELECT s.id, s.project_id, p.name AS project, s.branch, s.ai_title, s.first_prompt, s.last_text, s.last_prompt, s.last_activity
+      `SELECT s.id, s.project_id, p.name AS project, s.branch, s.ai_title, s.first_prompt, s.last_text, s.last_prompt, s.last_activity, s.model
        FROM sessions s JOIN projects p ON p.id = s.project_id
        WHERE (s.last_activity > ? AND COALESCE(s.entrypoint, 'cli') NOT LIKE 'sdk%') OR s.id IN (SELECT value FROM json_each(?))
        ORDER BY s.last_activity DESC`
@@ -209,6 +211,7 @@ export function buildState(
         lastActivity: r.last_activity ?? 0,
         host: h,
         sid: r.id,
+        model: r.model ?? undefined,
         myNote: myNote(r.id),
         pinned: pinned(r.id),
         starred: starred(r.id)
@@ -229,6 +232,7 @@ export function buildState(
       branch: r.branch && r.branch !== 'HEAD' ? r.branch : null,
       lastActivity: r.last_activity ?? 0,
       host,
+      model: r.model ?? undefined,
       pinned: pinned(r.id),
       starred: starred(r.id)
     })

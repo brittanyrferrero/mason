@@ -107,6 +107,8 @@ export function openDb(): DB {
   const cols = new Set((db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name))
   if (!cols.has('entrypoint')) db.exec('ALTER TABLE sessions ADD COLUMN entrypoint TEXT')
   // Moved to a project by hand: it stays there, whatever folder it works in.
+  // The model Claude last answered with ("claude-opus-5-5"), shown on each window.
+  if (!cols.has('model')) db.exec('ALTER TABLE sessions ADD COLUMN model TEXT')
   if (!cols.has('placed')) db.exec('ALTER TABLE sessions ADD COLUMN placed INTEGER NOT NULL DEFAULT 0')
   const prefCols = new Set((db.prepare('PRAGMA table_info(session_prefs)').all() as { name: string }[]).map((c) => c.name))
   // session_dirs is new: read every transcript once more so existing sessions get their folder counts.

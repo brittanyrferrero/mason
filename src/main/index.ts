@@ -9,7 +9,7 @@ import { STASH_DIR, takeStashes, writeStashCommand } from './stash'
 import { TRAY_1X, TRAY_2X } from './trayIcon'
 import { checkForUpdate, runUpdate, updateInfo } from './updates'
 import { rememberHostedIds, rememberTerminals, reopenAfterRestart } from './reopen'
-import { CLAUDE_PROJECTS, ingestAll } from './ingest'
+import { backfillModels, CLAUDE_PROJECTS, ingestAll } from './ingest'
 import { CLAUDE_SESSIONS, readLive } from './live'
 import { nameFor, projectIdFor } from './projects'
 import * as term from './pty'
@@ -317,6 +317,7 @@ app.whenReady().then(() => {
   db = openDb()
   initSummaries(db)
   ingestAll(db)
+  backfillModels(db)
 
   // Developer check: print what Mason sees and exit, without opening a window.
   if (process.argv.includes('--dump-state')) {

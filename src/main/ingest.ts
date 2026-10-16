@@ -15,6 +15,7 @@ type Patch = {
   last_prompt?: string
   last_text?: string
   pr_url?: string
+  model?: string
   started_at?: number
   last_activity?: number
   dirs: Map<string, number> // records per working folder in this chunk
@@ -66,6 +67,8 @@ function applyRecord(rec: any, patch: Patch): void {
     case 'assistant': {
       const text = textOf(rec.message?.content).trim()
       if (text) patch.last_text = text
+      const model = rec.message?.model
+      if (typeof model === 'string' && model.startsWith('claude')) patch.model = model
       if (!Number.isNaN(ts)) patch.last_activity = ts
       break
     }
@@ -106,8 +109,8 @@ function ingestFile(db: DB, path: string): boolean {
   const projectId = cwd ? projectIdFor(db, cwd) : null
 
   db.prepare(
-    `INSERT INTO sessions (id, project_id, cwd, entrypoint, branch, ai_title, first_prompt, last_prompt, last_text, pr_url, started_at, last_activity, transcript)
-     VALUES (@id, @project_id, @cwd, @entrypoint, @branch, @ai_title, @first_prompt, @last_prompt, @last_text, @pr_url, @started_at, @last_activity, @transcript)
+    `INSERT INTO sessions (id, project_id, cwd, entrypoint, branch, ai_title, first_prompt, last_prompt, last_text, pr_url, model, started_at, last_activity, transcript)
+     VALUES (@id, @project_id, @cwd, @entrypoint, @branch, @ai_title, @first_prompt, @last_prompt, @last_text, @pr_url, @model, @started_at, @last_activity, @transcript)
      ON CONFLICT(id) DO UPDATE SET
        project_id    = COALESCE(project_id, excluded.project_id),
        cwd           = COALESCE(cwd, excluded.cwd),
@@ -118,6 +121,7 @@ function ingestFile(db: DB, path: string): boolean {
        last_prompt   = COALESCE(excluded.last_prompt, last_prompt),
        last_text     = COALESCE(excluded.last_text, last_text),
        pr_url        = COALESCE(excluded.pr_url, pr_url),
+       model         = COALESCE(excluded.model, model),
        started_at    = COALESCE(started_at, excluded.started_at),
        last_activity = MAX(COALESCE(last_activity, 0), COALESCE(excluded.last_activity, 0))`
   ).run({
@@ -131,6 +135,7 @@ function ingestFile(db: DB, path: string): boolean {
     last_prompt: patch.last_prompt ?? null,
     last_text: patch.last_text ?? null,
     pr_url: patch.pr_url ?? null,
+    model: patch.model ?? null,
     started_at: patch.started_at ?? null,
     last_activity: patch.last_activity ?? null,
     transcript: path
@@ -186,4 +191,24 @@ export function ingestAll(db: DB): number {
   })
   run()
   return changed
+}
+
+// Sessions read in before Mason tracked the model: look for it near the end of recent transcripts.
+export function backfillModels(db: DB): void {
+  const rows = db
+    .prepare("SELECT id, transcript FROM sessions WHERE model IS NULL AND last_activity > ? AND COALESCE(entrypoint, 'cli') NOT LIKE 'sdk%'")
+    .all(Date.now() - 14 * 24 * 60 * 60 * 1000) as { id: string; transcript: string }[]
+  const set = db.prepare('UPDATE sessions SET model = ? WHERE id = ?')
+  for (const r of rows) {
+    try {
+      const size = statSync(r.transcript).size
+      const len = Math.min(size, 512_000)
+      const buf = Buffer.alloc(len)
+      const fd = openSync(r.transcript, 'r')
+      readSync(fd, buf, 0, len, size - len)
+      closeSync(fd)
+      const found = [...buf.toString('utf8').matchAll(/"model":"(claude-[a-z0-9.-]+)"/g)].pop()?.[1]
+      if (found) set.run(found, r.id)
+    } catch {}
+  }
 }

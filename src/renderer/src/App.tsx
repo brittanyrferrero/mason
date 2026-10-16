@@ -190,6 +190,12 @@ const LAYOUTS: [Layout, string][] = [
 ]
 const cycle = <T,>(list: [T, string][], cur: T): T => list[(list.findIndex(([v]) => v === cur) + 1) % list.length][0]
 
+// "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5"; anything else as it comes.
+function modelName(id: string): string {
+  const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d))?(?=-|$)/.exec(id)
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? '.' + m[3] : ''}` : id.replace(/^claude-/, '')
+}
+
 export function App() {
   const [state, setState] = useState<AppState | null>(null)
   const [view, setView] = useState<View>('projects')
@@ -472,7 +478,7 @@ export function App() {
     const known = allSessions.filter(({ s }, i) => s.host && openHosts.includes(s.host) && allSessions.findIndex((x) => x.s.host === s.host) === i)
     const pending = openHosts
       .filter((h) => !known.some(({ s }) => s.host === h))
-      .map((h) => ({ host: h, project: '', title: 'Starting…', focus: undefined as string | undefined, needs: false, working: true, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined }))
+      .map((h) => ({ host: h, project: '', title: 'Starting…', focus: undefined as string | undefined, needs: false, working: true, last: Infinity, sid: null as string | null, myNote: undefined as string | undefined, model: undefined as string | undefined }))
     const list = [
       ...known.map(({ s, project }) => ({
         host: s.host!,
@@ -483,7 +489,8 @@ export function App() {
         working: s.status === 'working',
         last: s.lastActivity,
         sid: s.sid ?? (s.id.startsWith('tmux:') ? null : s.id), // notes belong to the conversation, whichever copy this is
-        myNote: s.myNote
+        myNote: s.myNote,
+        model: s.model
       })),
       ...pending
     ]
@@ -979,6 +986,16 @@ export function App() {
                   {footers[w.host]?.mode && (
                     <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
                       {footers[w.host]!.mode}
+                    </span>
+                  )}
+                  {w.model && (
+                    <span className="mode-chip model-chip" title={`Model: ${w.model}`}>
+                      {modelName(w.model)}
+                    </span>
+                  )}
+                  {footers[w.host]?.notice && (
+                    <span className="mode-chip notice-chip" title={`${footers[w.host]!.notice}. Claude Code was updated; a session uses the new version once you end and resume it.`}>
+                      update
                     </span>
                   )}
                   <span className="bar-gap" />
