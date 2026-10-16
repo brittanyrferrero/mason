@@ -19,7 +19,7 @@ import { buildState, searchPast } from './state'
 import { isGitRoot, setWorktrees, tidyWorktrees, worktreesOn } from './worktrees'
 import { initSummaries, setSummaries, summarizeDue } from './summarize'
 import { focusTerminalTab } from './terminal'
-import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, selecting, SESSION_ID_RE, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
+import { endSession, initTmux, listHosted, NAME_RE, peek, scroll, selecting, SESSION_ID_RE, switchModel, setTerminalProject, startSession, startTerminal, TMUX, unscroll } from './tmux'
 
 let db: DB
 let win: BrowserWindow | null = null
@@ -669,6 +669,10 @@ app.whenReady().then(() => {
   })
   ipcMain.on('term:scroll', (e, client: unknown, lines: unknown) => {
     if (trusted(e) && typeof client === 'string' && CLIENT_RE.test(client)) scroll(sessionOf(client), Number(lines))
+  })
+  ipcMain.handle('session:model', (e, host: unknown, family: unknown) => {
+    if (!trusted(e) || typeof host !== 'string' || typeof family !== 'string' || !NAME_RE.test(host)) return null
+    return switchModel(host, family)
   })
   ipcMain.on('term:selecting', (e, client: unknown) => {
     if (trusted(e) && typeof client === 'string' && CLIENT_RE.test(client)) selecting(sessionOf(client))

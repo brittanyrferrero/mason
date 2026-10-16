@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 // ⌘ shortcuts that belong to Mason (switching tabs, arranging windows), not to the terminal.
-const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF', 'KeyJ'])
+const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF', 'KeyJ', 'KeyM'])
 
 // Claude's footer: the permission-mode line ("⏵⏵ auto mode on (shift+tab to cycle) · ← for agents") or the plain
 // "? for shortcuts" hint. Mason tucks it out of sight and shows the mode as a small chip in the window's title bar.
@@ -17,7 +17,7 @@ const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mod
 // One live terminal, attached to a Mason session (a tmux session) through the main process.
 // Unmounting only detaches; the session keeps running.
 // `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
-export type Footer = { mode: string | null; text: string; notice?: string } | null
+export type Footer = { mode: string | null; text: string; notice?: string; draft?: boolean } | null
 
 export function Term({ name, focus, tick, peek = false, onFooter }: { name: string; focus: boolean; tick: number; peek?: boolean; onFooter?: (f: Footer) => void }) {
   const client = peek ? `${name}~peek` : name
@@ -158,10 +158,26 @@ export function Term({ name, focus, tick, peek = false, onFooter }: { name: stri
         t.element.style.transform = atBottom ? '' : `translateY(-${rowH * extra}px)`
         t.element.style.clipPath = atBottom ? `inset(0 0 ${rowH * extra}px 0)` : `inset(${rowH * extra}px 0 0 0)`
       }
-      const key = last ? `${last}\n${notice}` : ''
+      // Whether something is typed in Claude's prompt (dim placeholder text doesn't count), so Mason never types into it.
+      let draft = false
+      for (let k = at + 1; at >= 0 && k < at + 8; k++) {
+        const line = buf.getLine(buf.viewportY + t.rows - 1 - k)
+        const text = line?.translateToString(true) ?? ''
+        const i = text.indexOf('❯')
+        if (i < 0) continue
+        for (let x = i + 1; x < text.length; x++) {
+          const c = line!.getCell(x)
+          if (c && c.getChars().trim()) {
+            draft = !c.isDim()
+            break
+          }
+        }
+        break
+      }
+      const key = last ? `${last}\n${notice}\n${draft}` : ''
       if (key !== lastFooter) {
         lastFooter = key
-        footerCb.current?.(last ? { mode: modeOf(last), text: last, notice: notice || undefined } : null)
+        footerCb.current?.(last ? { mode: modeOf(last), text: last, notice: notice || undefined, draft } : null)
       }
     }
     const soon = () => frame || (frame = requestAnimationFrame(tuck))
