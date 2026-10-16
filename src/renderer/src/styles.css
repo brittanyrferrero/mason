@@ -381,10 +381,6 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .win-bar .mode-chip { flex: none; font-size: 11px; color: #8e8e93; border: 1px solid #3a3a3e; border-radius: 999px; padding: 0 7px; line-height: 16px; white-space: nowrap; }
 .win-bar .mode-chip.auto, .win-bar .mode-chip.bypass { color: #c7c7cc; }
 .win-bar .model-chip { border-color: transparent; padding: 0 2px; }
-.win-bar .chip-pick { position: relative; cursor: pointer; }
-.win-bar .chip-pick:hover { color: #f2f2f7; border-color: #5a5a5e; }
-.win-bar .chip-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
-.win-bar .chip-pick select:disabled { cursor: default; }
 .win-bar .notice-chip { color: #8fc79a; border-color: #2f4a35; }
 
 /* Window title bar: title, its pen, the mode chip, then a gap pushing the window buttons to the right. */

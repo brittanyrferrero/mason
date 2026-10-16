@@ -159,56 +159,6 @@ export function peek(name: string): 'trust' | 'shell' | 'starting' {
   return 'starting'
 }
 
-// Switches the model for this session only, the way you would by hand: open Claude's /model picker, move to the
-// newest model of that family ("opus" → "Opus 5.5"), and press s ("use this session only"), so your default for new
-// sessions is never touched. Only call it while Claude is idle with nothing typed. Returns the model it picked, and
-// whether Claude is now asking you to confirm (Fable runs on extra usage credits; Mason never answers that for you).
-export const MODEL_FAMILIES = ['opus', 'sonnet', 'fable', 'haiku'] as const
-export async function switchModel(name: string, family: string): Promise<{ label: string; confirm: boolean } | null> {
-  if (!NAME_RE.test(name) || !(MODEL_FAMILIES as readonly string[]).includes(family)) return null
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-  const keys = (...k: string[]) => tmux(['send-keys', '-t', name, ...k])
-  // Option rows look like "  ❯ 2.  Opus 5.5    For complex work…"; the ❯ marks the one in focus.
-  const options = () => {
-    const screen = tmux(['capture-pane', '-p', '-t', name])
-    if (!/Select model/.test(screen) || !/use this session only/.test(screen)) return null
-    return screen.split('\n').flatMap((l) => {
-      const m = /^\s*(❯)?\s*[↓↑]?\s*(\d+)\.\s+(.+?)(?:\s{2,}|$)/.exec(l)
-      return m ? [{ focused: !!m[1], n: Number(m[2]), label: m[3].replace(/\s*✔$/, '') }] : []
-    })
-  }
-  try {
-    keys('-l', '/model')
-    await wait(150)
-    keys('Enter')
-    let list: ReturnType<typeof options> = null
-    for (let i = 0; i < 20 && !list?.length; i++) {
-      await wait(150)
-      list = options()
-    }
-    if (!list?.length) return null // the picker never opened; leave everything as it is
-    const target = list.find((o) => o.label.toLowerCase().startsWith(family + ' '))
-    const focused = list.find((o) => o.focused)
-    if (!target || !focused) {
-      keys('Escape')
-      return null
-    }
-    const steps = target.n - focused.n
-    for (let i = 0; i < Math.abs(steps); i++) keys(steps > 0 ? 'Down' : 'Up')
-    await wait(200)
-    if (options()?.find((o) => o.focused)?.n !== target.n) {
-      keys('Escape')
-      return null
-    }
-    keys('-l', 's')
-    await wait(400)
-    const after = tmux(['capture-pane', '-p', '-t', name])
-    return { label: target.label, confirm: /Switch to .+\?/.test(after) && !/Set model to/.test(after.split('\n').slice(-12).join('\n')) }
-  } catch {
-    return null
-  }
-}
-
 // Scrolling uses tmux's own history (copy mode), so you can read back everything Claude printed, not just
 // what's on screen. -e drops out of copy mode by itself once you scroll back to the bottom.
 const scrolled = new Set<string>()

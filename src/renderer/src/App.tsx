@@ -142,8 +142,6 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
     'Open tab',
     [
       ['Next window', ['⌘', ']']],
-      ['Switch model', ['⌘', '⇧', 'M']],
-      ['Switch mode (in a window)', ['⇧', 'Tab']],
       ['Previous window', ['⌘', '[']],
       ['Move window later', ['⌘', '⇧', ']']],
       ['Move window earlier', ['⌘', '⇧', '[']],
@@ -191,9 +189,6 @@ const LAYOUTS: [Layout, string][] = [
   ['one', 'one at a time']
 ]
 const cycle = <T,>(list: [T, string][], cur: T): T => list[(list.findIndex(([v]) => v === cur) + 1) % list.length][0]
-
-const MODES = ['default', 'accept edits', 'plan', 'auto']
-const MODELS: [string, string][] = [['opus', 'Opus'], ['sonnet', 'Sonnet'], ['fable', 'Fable'], ['haiku', 'Haiku']]
 
 // "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5"; anything else as it comes.
 function modelName(id: string): string {
@@ -254,51 +249,6 @@ export function App() {
     }
   })
   const [footers, setFooters] = useState<Record<string, Footer>>({}) // Claude's mode line, per window, shown as a chip
-  // Switching mode presses shift+tab for you, one press per footer change, until Claude reaches the mode you picked
-  // (or comes back round to where it started, if that mode isn't in its cycle).
-  const modeGoal = useRef<Record<string, { want: string; start: string; presses: number; at: number }>>({})
-  const setMode = (host: string, want: string) => {
-    const now = footers[host]?.mode ?? 'default'
-    if (now === want) return
-    modeGoal.current[host] = { want, start: now, presses: 1, at: Date.now() }
-    window.mason.input(host, '\x1b[Z')
-  }
-  useEffect(() => {
-    for (const [host, g] of Object.entries(modeGoal.current)) {
-      const now = footers[host]?.mode ?? 'default'
-      if (now === g.want || g.presses >= 6 || (g.presses > 1 && now === g.start) || Date.now() - g.at > 5000) {
-        delete modeGoal.current[host]
-        continue
-      }
-      g.presses++
-      window.mason.input(host, '\x1b[Z')
-    }
-  }, [footers])
-  // Switching model goes through Claude's own /model picker, for this session only (see switchModel in tmux.ts).
-  // The new name shows straight away; the transcript catches up with Claude's next reply.
-  const [modelPicked, setModelPicked] = useState<Record<string, { label: string; was: string }>>({})
-  const setModel = async (host: string, was: string, family: string) => {
-    if (footers[host]?.draft) return
-    const r = await window.mason.switchModel(host, family)
-    if (!r) return flashNote({ text: 'Couldn’t switch the model. Try /model in the window.', tone: 'muted' })
-    if (r.confirm) {
-      setFocusHost(host)
-      setTick((t) => t + 1)
-      return flashNote({ text: `${r.label} needs your OK: Claude is asking in the window.`, tone: 'muted' })
-    }
-    setModelPicked((m) => ({ ...m, [host]: { label: r.label, was } }))
-  }
-  // ⌘⇧M opens the model list for the focused window.
-  const pickModel = (host: string) => {
-    const sel = document.querySelector<HTMLSelectElement>(`select[data-model-for="${host}"]`)
-    if (!sel) return flashNote({ text: 'The model shows once Claude has replied in this window.', tone: 'muted' })
-    if (sel.disabled) return flashNote({ text: sel.closest('label')?.title.split('\n')[1] ?? 'Can’t switch right now.', tone: 'muted' })
-    try {
-      sel.showPicker()
-    } catch {
-      sel.focus()
-    }
-  }
   const [spinning, setSpinning] = useState<string | null>(null) // window whose "side thought" box is open
   const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
   const [dragging, setDragging] = useState<string | null>(null)
@@ -729,7 +679,6 @@ export function App() {
         }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
         if (c === 'KeyN' && e.shiftKey && focusHost) return e.preventDefault(), setSpinning(focusHost)
-        if (c === 'KeyM' && e.shiftKey && focusHost) return e.preventDefault(), pickModel(focusHost)
         if (c === 'KeyT' && !e.shiftKey && focusHost) {
           e.preventDefault()
           return void window.mason.terminalHere(focusHost).then(handle)
@@ -1034,41 +983,15 @@ export function App() {
                       <RenameIcon />
                     </button>
                   )}
-                  {footers[w.host] && (
-                    <label className={`mode-chip chip-pick ${(footers[w.host]!.mode ?? 'default').split(' ')[0].toLowerCase()}`} title={`Mode: ${footers[w.host]!.mode ?? 'default'}\nClick to pick a mode, or press shift+tab in the window`}>
-                      {footers[w.host]!.mode ?? 'default'}
-                      <select aria-label="Permission mode" value={footers[w.host]!.mode ?? 'default'} onChange={(e) => setMode(w.host, e.target.value)}>
-                        {[...new Set([footers[w.host]!.mode ?? 'default', ...MODES])].map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                  {footers[w.host]?.mode && (
+                    <span className={`mode-chip ${footers[w.host]!.mode!.split(' ')[0].toLowerCase()}`} title={`${footers[w.host]!.text}  (shift+tab in the window to change)`}>
+                      {footers[w.host]!.mode}
+                    </span>
                   )}
                   {w.model && (
-                    <label
-                      className="mode-chip model-chip chip-pick"
-                      title={
-                        w.working
-                          ? `Model: ${w.model}\nYou can switch once Claude is done`
-                          : footers[w.host]?.draft
-                            ? `Model: ${w.model}\nClear what you've typed in the prompt to switch models`
-                            : `Model: ${w.model}\nClick or press ⌘⇧M to switch, for this session only`
-                      }
-                    >
-                      {modelPicked[w.host]?.was === w.model ? modelPicked[w.host]!.label : modelName(w.model)}
-                      <select aria-label="Model" data-model-for={w.host} value="" disabled={w.working || !!footers[w.host]?.draft} onChange={(e) => e.target.value && setModel(w.host, w.model!, e.target.value)}>
-                        <option value="" disabled>
-                          Switch model
-                        </option>
-                        {MODELS.map(([alias, label]) => (
-                          <option key={alias} value={alias}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <span className="mode-chip model-chip" title={`Model: ${w.model}`}>
+                      {modelName(w.model)}
+                    </span>
                   )}
                   {footers[w.host]?.notice && (
                     <span className="mode-chip notice-chip" title={`${footers[w.host]!.notice}. Claude Code was updated; a session uses the new version once you end and resume it.`}>
