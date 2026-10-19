@@ -7,10 +7,9 @@ import '@xterm/xterm/css/xterm.css'
 const APP_KEYS = new Set(['Digit1', 'Digit2', 'BracketLeft', 'BracketRight', 'Enter', 'KeyL', 'KeyO', 'KeyW', 'KeyK', 'KeyP', 'KeyN', 'KeyT', 'KeyF', 'KeyJ'])
 
 // Claude's footer: the permission-mode line ("⏵⏵ auto mode on (shift+tab to cycle) · ← for agents") or the plain
-// "? for shortcuts" hint. Mason tucks it out of sight and shows the mode as a small chip in the window's title bar.
+// "? for shortcuts" hint. Mason shows the mode as a small chip in the window's title bar.
 const FOOTER_RE = /(?:⏵⏵|⏸|⏵)\s*\S.*\bon\b|shift\+tab to cycle|\? for shortcuts/
-// A line Claude sometimes adds under its footer ("✓ Update installed · Restart to update"). It's tucked away with the
-// footer and shown as a small chip in the title bar instead.
+// A line Claude sometimes adds under its footer ("✓ Update installed · Restart to update"), also shown as a chip.
 const NOTICE_RE = /update installed|restart to update|update available/i
 const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mode\s+)?on\b/i.exec(line)?.[1].replace(/\s*mode$/i, '') ?? null
 
@@ -19,20 +18,17 @@ const modeOf = (line: string) => /(?:⏵⏵|⏸|⏵)\s*([a-z][a-z -]*?)\s+(?:mod
 // `peek` makes a second, separate view of the same session (for the Peek overlay) alongside its Open-tab window.
 export type Footer = { mode: string | null; text: string; notice?: string } | null
 
-// `showFooter` leaves Claude's footer in view instead (the twirl under each window).
 export function Term({
   name,
   focus,
   tick,
   peek = false,
-  showFooter = false,
   onFooter
 }: {
   name: string
   focus: boolean
   tick: number
   peek?: boolean
-  showFooter?: boolean
   onFooter?: (f: Footer) => void
 }) {
   const client = peek ? `${name}~peek` : name
@@ -40,9 +36,6 @@ export function Term({
   const termRef = useRef<Terminal | null>(null)
   const footerCb = useRef(onFooter)
   footerCb.current = onFooter
-  const showRef = useRef(showFooter)
-  showRef.current = showFooter
-  const retuck = useRef<() => void>(undefined)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -115,11 +108,6 @@ export function Term({
     document.addEventListener('mouseup', onUp, true)
     // And should xterm's view ever move off the bottom anyway, put it straight back.
     const pinned = t.onScroll(() => t.buffer.active.viewportY !== t.buffer.active.baseY && t.scrollToBottom())
-    // Claude gets one row more than fits (up to three while its footer has a notice line under it). Those rows sit just below
-    // the visible edge: when they hold Claude's footer, it stays out of sight (its mode shows in Mason's title bar
-    // instead). When they hold anything else (a permission prompt, a menu), the view shifts up so nothing that needs
-    // you is ever hidden.
-    let extra = 1
     const fitPlus = () => {
       const d = fit.proposeDimensions()
       if (!d || !Number.isFinite(d.rows) || !Number.isFinite(d.cols)) return
@@ -128,91 +116,39 @@ export function Term({
       const cellW = (t as unknown as { _core: { _renderService: { dimensions: { css: { cell: { width: number } } } } } })._core._renderService.dimensions.css.cell.width
       const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
       const cols = Math.max(20, cellW ? Math.floor((host.clientWidth - pad) / cellW) : d.cols)
-      const rows = Math.max(5, d.rows + extra)
+      const rows = Math.max(5, d.rows)
       if (t.cols !== cols || t.rows !== rows) t.resize(cols, rows)
     }
+    // Claude's footer stays in view; Mason only reads it, to show the mode (and any update notice) as title-bar chips.
+    // Everything below Claude's input box (its bottom edge is a row of ─) is the footer.
     let lastFooter = ''
-    let blanked: HTMLElement[] = []
     let frame = 0
     const tuck = () => {
       frame = 0
       const buf = t.buffer.active
-      if (buf.viewportY !== buf.baseY) t.scrollToBottom()
       const row = (i: number) => buf.getLine(buf.viewportY + t.rows - 1 - i)?.translateToString(true).trim() ?? ''
-      // Scrolled back through the history (tmux shows its "[3/4245]" marker top right): the view holds still. The rows
-      // below are old text, so nothing needs shifting into sight, and resizing now would make the scroll jump.
-      if (!showRef.current && /\[\d+\/\d+\]$/.test(row(t.rows - 1))) {
-        for (const d of blanked) d.style.visibility = ''
-        blanked = []
-        const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
-        const rowH = screen ? screen.clientHeight / t.rows : 0
-        if (t.element && rowH) {
-          t.element.style.transform = ''
-          t.element.style.clipPath = `inset(0 0 ${rowH * extra}px 0)`
-        }
-        return
-      }
-      // Everything below Claude's input box is its footer: the mode line, plus whatever it adds under it (an update
-      // notice, a "/clear to save tokens" hint). The box's bottom edge is a row of ─.
-      let at = -1
       let notice = ''
       let modeLine = ''
       for (let k = 1; k < Math.min(12, t.rows); k++) {
         if (!/^─{8,}$/.test(row(k))) continue
         const below = Array.from({ length: k }, (_, i) => row(i))
         modeLine = below.find((r) => FOOTER_RE.test(r)) ?? ''
-        if (modeLine) {
-          at = k - 1
-          notice = below.find((r) => NOTICE_RE.test(r)) ?? ''
-        }
+        if (modeLine) notice = below.find((r) => NOTICE_RE.test(r)) ?? ''
         break
       }
-      // No input box in sight (a menu or prompt replaces it): the footer can still sit at the very bottom.
-      // Near the bottom the footer is kept just out of sight; higher up (a conversation that doesn't fill the window
-      // yet) its rows are blanked where they are.
-      for (let k = 0; at < 0 && k < 3; k++) {
+      for (let k = 0; !modeLine && k < 3; k++) {
         const r = row(k)
-        if (FOOTER_RE.test(r)) (at = k), (modeLine = r)
+        if (FOOTER_RE.test(r)) modeLine = r
         else if (NOTICE_RE.test(r)) notice = r
         else if (r) break
       }
-      const isFooter = at >= 0 && at <= 4
-      const last = at >= 0 ? modeLine : ''
-      for (const d of blanked) d.style.visibility = ''
-      blanked = []
-      const show = showRef.current
-      if (at > 4 && !show) {
-        const divs = t.element?.querySelectorAll<HTMLElement>('.xterm-rows > div')
-        for (let k = 0; k <= at; k++) {
-          const d = divs?.[t.rows - 1 - k]
-          if (d && row(k)) (d.style.visibility = 'hidden'), blanked.push(d)
-        }
-      }
-      const want = show ? 0 : isFooter ? at + 1 : extra || 1
-      if (want !== extra) {
-        extra = want
-        try {
-          fitPlus()
-        } catch {}
-      }
-      const screen = t.element?.querySelector<HTMLElement>('.xterm-screen')
-      const rowH = screen ? screen.clientHeight / t.rows : 0
-      // Exactly `extra` rows are out of sight: the bottom ones (the footer), or, shifted up, the top ones.
-      // (Below a footer higher up there's only blank space, so the bottom rows can go without shifting anything.)
-      const atBottom = at >= 0
-      if (t.element && show) t.element.style.transform = t.element.style.clipPath = ''
-      else if (t.element && rowH) {
-        t.element.style.transform = atBottom ? '' : `translateY(-${rowH * extra}px)`
-        t.element.style.clipPath = atBottom ? `inset(0 0 ${rowH * extra}px 0)` : `inset(${rowH * extra}px 0 0 0)`
-      }
-      const key = last ? `${last}\n${notice}` : ''
+      const key = modeLine ? `${modeLine}\n${notice}` : ''
       if (key !== lastFooter) {
         lastFooter = key
-        footerCb.current?.(last ? { mode: modeOf(last), text: last, notice: notice || undefined } : null)
+        footerCb.current?.(modeLine ? { mode: modeOf(modeLine), text: modeLine, notice: notice || undefined } : null)
       }
     }
     const soon = () => frame || (frame = requestAnimationFrame(tuck))
-    retuck.current = soon
     const parsed = t.onWriteParsed(soon)
     try {
       fitPlus()
@@ -257,10 +193,6 @@ export function Term({
       termRef.current = null
     }
   }, [client])
-
-  useEffect(() => {
-    retuck.current?.()
-  }, [showFooter])
 
   useEffect(() => {
     if (focus) termRef.current?.focus()

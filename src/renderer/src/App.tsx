@@ -249,15 +249,6 @@ export function App() {
     }
   })
   const [footers, setFooters] = useState<Record<string, Footer>>({}) // Claude's mode line, per window, shown as a chip
-  // Windows where you've twirled Claude's footer back into view. Remembered on this Mac.
-  const [footerOpen, setFooterOpen] = useState<string[]>(() => {
-    try {
-      return JSON.parse(stored('footerOpen', '[]'))
-    } catch {
-      return []
-    }
-  })
-  useEffect(() => store('footerOpen', JSON.stringify(footerOpen)), [footerOpen])
   const [spinning, setSpinning] = useState<string | null>(null) // window whose "side thought" box is open
   const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
   const [dragging, setDragging] = useState<string | null>(null)
@@ -1115,23 +1106,8 @@ export function App() {
                   name={w.host}
                   focus={view === 'open' && focused && noting !== `s:${w.sid}`}
                   tick={tick}
-                  showFooter={footerOpen.includes(w.host)}
                   onFooter={(f) => setFooters((m) => (m[w.host]?.text === f?.text && m[w.host]?.notice === f?.notice ? m : { ...m, [w.host]: f }))}
                 />
-                {footers[w.host] && (
-                  <button
-                    className={`footer-twirl ${footerOpen.includes(w.host) ? 'open' : ''}`}
-                    type="button"
-                    aria-expanded={footerOpen.includes(w.host)}
-                    aria-label={footerOpen.includes(w.host) ? 'Hide Claude’s footer' : 'Show Claude’s footer'}
-                    title={footerOpen.includes(w.host) ? 'Hide Claude’s footer' : 'Show Claude’s footer (mode, hints, notices)'}
-                    onClick={() => setFooterOpen((o) => (o.includes(w.host) ? o.filter((h) => h !== w.host) : [...o, w.host]))}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </button>
-                )}
               </div>
             ]
           })}
