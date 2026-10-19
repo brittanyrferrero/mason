@@ -2,6 +2,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { writeCopyScript } from './copyUnwrap'
 import { DATA_DIR } from './db'
 
 // Mason runs its own private tmux server ("-L mason"), separate from any tmux you use yourself.
@@ -28,7 +29,7 @@ set -g set-titles off
 # (its right-click menu can kill the session). If the program in the pane asks for the mouse itself, it gets it.
 set -g mouse on
 set -g set-clipboard off
-set -s copy-command 'pbcopy'
+set -s copy-command 'sh "$HOME/.mason/copy.sh"'
 unbind-key -T root -a
 bind-key -n MouseDown1Pane if -F '#{mouse_any_flag}' 'send -M'
 bind-key -n MouseUp1Pane if -F '#{mouse_any_flag}' 'send -M'
@@ -71,6 +72,7 @@ function tmux(args: string[]): string {
 }
 
 export function initTmux(): void {
+  writeCopyScript() // the copy-command below runs it
   writeFileSync(CONF, CONF_TEXT, { mode: 0o600 })
   // A server that's already running (sessions outlive Mason) only read the config it started with.
   if (TMUX) execFile(TMUX, [...baseArgs(), 'source-file', CONF], { timeout: 5000, env: cleanEnv() }, () => {})
