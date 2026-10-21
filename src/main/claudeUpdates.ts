@@ -11,9 +11,10 @@ import { capturePane, listHosted, pasteText, sendLine } from './tmux'
 // When Claude Code updates itself, every running session keeps the old version until it's restarted, and each one
 // says so in its footer. Instead, Mason quietly restarts its own sessions onto the new version once they've been idle
 // for a while, keeping the conversation (claude --resume) and putting back anything you'd half-typed in the prompt.
-// A session whose prompt Mason can't read cleanly is left alone rather than risk losing a draft.
+// A session with something typed in its prompt is left alone (you're mid-thought, and may come back to send it), and
+// so is one whose prompt Mason can't read cleanly.
 
-const IDLE_MS = 2 * 60_000 // quiet this long (no Claude activity, no typing) before it's restarted
+const IDLE_MS = 10 * 60_000 // quiet this long (no Claude activity, no typing) before it's restarted
 const RETRY_MS = 30 * 60_000 // after a session couldn't be restarted, leave it alone this long
 const DRAFTS = join(DATA_DIR, 'drafts')
 
@@ -95,7 +96,7 @@ export type RestartResult = 'restarted' | 'restarted-draft' | 'skipped' | 'draft
 
 export async function restartSession(name: string, sid: string, pid: number, readLive: () => Map<string, LiveInfo>): Promise<RestartResult> {
   const draft = readDraft(name)
-  if (draft === null) return 'skipped'
+  if (draft === null || draft) return 'skipped'
   // Keep a copy of the draft no matter what happens next.
   let saved = ''
   if (draft) {
