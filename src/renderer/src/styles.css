@@ -357,6 +357,8 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 /* Spin-off: a one-line "side thought" box under a window's title bar. */
 .spin-box { flex: none; border: 0; border-bottom: 1px solid #3a3a3e; background: #232325; color: #f2f2f7; font: inherit; font-size: 12.5px; padding: 7px 12px; outline: none; user-select: text; }
 .spin-box::placeholder { color: #8e8e93; }
+/* What you highlighted, quoted above the side-thought box: a few lines at most, the rest scrolls. */
+.spin-quote { flex: none; margin: 0; max-height: 5.4em; overflow-y: auto; white-space: pre-wrap; background: #232325; color: #c7c7cc; font-size: 12.5px; line-height: 1.35; padding: 7px 12px 2px 12px; border-left: 2px solid #48484a; user-select: text; }
 .mini.saved[draggable='true'] { cursor: grab; }
 
 /* ---- Update: a quiet button that only shows up when there's something new ---- */

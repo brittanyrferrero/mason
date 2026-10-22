@@ -153,7 +153,7 @@ const SHORTCUTS: [string, [string, string[]][]][] = [
       ['Next project', ['⌘', 'P']],
       ['Note on this session', ['⌘', 'N']],
       ['New terminal here', ['⌘', 'T']],
-      ['Spin off a side thought', ['⌘', '⇧', 'N']],
+      ['Spin off a side thought (or what you just highlighted)', ['⌘', '⇧', 'N']],
       ['Hide window', ['⌘', '⇧', 'W']],
       ['End session (twice)', ['⌘', '⇧', 'K']]
     ]
@@ -258,6 +258,7 @@ export function App() {
   })
   const [footers, setFooters] = useState<Record<string, Footer>>({}) // Claude's mode line, per window, shown as a chip
   const [spinning, setSpinning] = useState<string | null>(null) // window whose "side thought" box is open
+  const [spinQuote, setSpinQuote] = useState<string | null>(null) // what you'd just highlighted there, if anything
   const [tick, setTick] = useState(0) // bumps to hand focus back to the terminal after using a control
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<{ host: string; after: boolean } | null>(null)
@@ -537,6 +538,17 @@ export function App() {
     return () => clearInterval(t)
   }, [])
   const touch = (host: string) => touched.current.set(host, Date.now())
+  // When each window last became the one you're in, so a highlight is only quoted in the window it came from.
+  const focusedSince = useRef(new Map<string, number>())
+  useEffect(() => {
+    if (focusHost) focusedSince.current.set(focusHost, Date.now())
+  }, [focusHost])
+  // ⌘⇧N: the side-thought box, with what you just highlighted in this window already quoted in it.
+  const startSpin = (host: string) => {
+    setSpinQuote(null)
+    setSpinning(host)
+    window.mason.lastCopy().then((c) => c && c.at >= (focusedSince.current.get(host) ?? Infinity) - 1000 && setSpinQuote(c.text))
+  }
   // Experiment (may go): rest on a window for a moment, then start typing, and it becomes the active one.
   const armed = useHoverToType(view === 'open', focusHost, (host) => {
     touch(host)
@@ -716,7 +728,7 @@ export function App() {
           return showProject(all[(all.indexOf(only) + 1) % all.length])
         }
         if (c === 'KeyW' && e.shiftKey && focusHost) return e.preventDefault(), closeWindow(focusHost)
-        if (c === 'KeyN' && e.shiftKey && focusHost) return e.preventDefault(), setSpinning(focusHost)
+        if (c === 'KeyN' && e.shiftKey && focusHost) return e.preventDefault(), startSpin(focusHost)
         if (c === 'KeyT' && !e.shiftKey && focusHost) {
           e.preventDefault()
           return void window.mason.terminalHere(focusHost).then(handle)
@@ -1088,7 +1100,7 @@ export function App() {
                           <FocusIcon />
                         </button>
                       )}
-                      <button className="x note-x" type="button" aria-label="Spin off a side thought into a new session here" title="Spin off a side thought: a new session in this folder (⌘⇧N)" onClick={() => setSpinning(w.host)}>
+                      <button className="x note-x" type="button" aria-label="Spin off a side thought into a new session here" title="Spin off a side thought: a new session in this folder (⌘⇧N)" onClick={() => startSpin(w.host)}>
                         <BranchIcon />
                       </button>
                       {w.sid && (
@@ -1122,18 +1134,26 @@ export function App() {
                     </>
                   )}
                 </div>
+                {spinning === w.host && spinQuote && <blockquote className="spin-quote">{spinQuote}</blockquote>}
                 {spinning === w.host && (
                   <input
                     className="spin-box"
                     autoFocus
                     maxLength={10000}
-                    placeholder="Side thought… Enter starts it as a new session in this folder (empty: a blank one). Esc cancels."
+                    placeholder={
+                      spinQuote
+                        ? 'Add a note, or just press Enter to spin this off as a new session. ⌫ drops the quote, Esc cancels.'
+                        : 'Side thought… Enter starts it as a new session in this folder (empty: a blank one). Esc cancels.'
+                    }
                     aria-label="Side thought to spin off"
                     onKeyDown={(e) => {
                       e.stopPropagation()
                       if (e.key === 'Escape') return setSpinning(null), setTick((t) => t + 1)
+                      if (e.key === 'Backspace' && spinQuote && !e.currentTarget.value) return setSpinQuote(null)
                       if (e.key !== 'Enter') return
-                      const thought = e.currentTarget.value
+                      const note = e.currentTarget.value.trim()
+                      const quote = spinQuote ? spinQuote.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n') : ''
+                      const thought = quote ? `${note || 'Let’s look into this:'}\n\n${quote}` : note
                       setSpinning(null)
                       setFocusHost(w.host)
                       window.mason.spinoff(w.host, thought).then((r) => r.error && flashNote({ text: r.error, tone: 'muted' }))

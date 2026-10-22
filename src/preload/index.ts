@@ -37,6 +37,7 @@ const api = {
   setClaudeAuto: (on: boolean): Promise<boolean> => ipcRenderer.invoke('claudeAuto:set', on),
   setModel: (id: string, model: string): Promise<{ ok?: boolean; error?: string }> => ipcRenderer.invoke('session:model', id, model),
   spinoff: (fromHost: string, thought: string): Promise<HostResult> => ipcRenderer.invoke('session:spinoff', fromHost, thought),
+  lastCopy: (): Promise<{ text: string; at: number } | null> => ipcRenderer.invoke('copy:last'),
   // A spin-off started (from /spinoff in Claude, or ⌘⇧N): open its window beside the one it came from.
   onSpunoff: (cb: (host: string, from: string | null) => void) => {
     const listener = (_e: IpcRendererEvent, host: string, from: string | null) => cb(host, from)

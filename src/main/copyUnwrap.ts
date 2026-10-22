@@ -48,12 +48,15 @@ print join("\n", map { $_ eq '' ? '' : $_ } @out);
 
 // What tmux runs on every copy. If unwrapping fails for any reason, the text is copied exactly as it was.
 export const COPY_COMMAND = join(DATA_DIR, 'copy.sh')
+// The latest copy is also kept (private to you) so ⌘⇧N can spin off what you just highlighted.
+export const LAST_COPY = join(DATA_DIR, 'last-copy.txt')
 const COMMAND = `#!/bin/sh
 # Written by Mason. tmux's copy-command: unwrap Claude's lines (copy-unwrap.pl), then put the text on the clipboard.
 t=$(cat; printf x); t=\${t%x}
 out=$(printf '%s' "$t" | /usr/bin/perl "$HOME/.mason/copy-unwrap.pl" 2>/dev/null; printf x); out=\${out%x}
 [ -n "$out" ] || out=$t
 printf '%s' "$out" | pbcopy
+(umask 077; printf '%s' "$out" > "$HOME/.mason/last-copy.txt")
 `
 
 export function writeCopyScript(): void {

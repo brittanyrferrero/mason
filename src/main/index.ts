@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { watchDebugRequests } from './debugSnapshot'
 import { autoUpdateOn, modelOf, noteTyping, restartSession, startClaudeUpdater, updateView } from './claudeUpdates'
-import { existsSync, watch, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs'
+import { LAST_COPY } from './copyUnwrap'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DATA_DIR, openDb, type DB } from './db'
@@ -582,6 +583,18 @@ app.whenReady().then(() => {
   try {
     watch(SPINOFF_DIR, (_ev, f) => f?.endsWith('.json') && setTimeout(takeSpun, 200))
   } catch {}
+  // What you last highlighted in a window, if it was in the last couple of minutes (for ⌘⇧N).
+  ipcMain.handle('copy:last', (e) => {
+    if (!trusted(e)) return null
+    try {
+      const at = statSync(LAST_COPY).mtimeMs
+      if (Date.now() - at > 2 * 60_000) return null
+      const text = readFileSync(LAST_COPY, 'utf8').trim().slice(0, 10_000)
+      return text ? { text, at } : null
+    } catch {
+      return null
+    }
+  })
   ipcMain.handle('session:spinoff', (e, from: unknown, thought: unknown) => {
     if (!trusted(e) || typeof from !== 'string' || !NAME_RE.test(from) || typeof thought !== 'string') return { error: 'bad request' }
     const h = listHosted().find((x) => x.name === from)
