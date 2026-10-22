@@ -393,14 +393,14 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 /* Window title bar: title, its pen, the mode chip, then a gap pushing the window buttons to the right. */
 .win-bar b { flex: 0 1 auto; }
 .win-bar .bar-gap { flex: 1; min-width: 4px; }
-/* The name always keeps room: buttons sit closer together, and as a window narrows the model, then focus and
-   expand (⌘⇧F, ⌘E), then the mode step aside. Wide windows show everything. */
+/* The name always keeps room: buttons sit closer together, and as a window narrows the mode (it's in Claude's own
+   footer too), then focus and expand (⌘⇧F, ⌘E), then the model step aside. Wide windows show everything. */
 .win { container-type: inline-size; }
 .win-bar b { min-width: min(8em, 30%); }
 .win-bar .bar-gap ~ .x { margin-left: -6px; }
-@container (max-width: 470px) { .win-bar .model-chip { display: none; } }
+@container (max-width: 470px) { .win-bar .mode-chip:not(.model-chip) { display: none; } }
 @container (max-width: 440px) { .win-bar .spot-x { display: none; } }
-@container (max-width: 360px) { .win-bar .mode-chip { display: none; } }
+@container (max-width: 360px) { .win-bar .model-chip { display: none; } }
 .win-bar .title-pen { margin-left: -4px; opacity: 0.55; }
 .win-bar .title-pen:hover, .win-bar .title-pen:focus-visible { opacity: 1; }
 
