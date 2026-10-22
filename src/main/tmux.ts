@@ -44,7 +44,7 @@ set -s copy-command 'sh "$HOME/.mason/copy.sh"'
 unbind-key -T root -a
 bind-key -n MouseDown1Pane if -F '#{mouse_any_flag}' 'send -M'
 bind-key -n MouseUp1Pane if -F '#{mouse_any_flag}' 'send -M'
-bind-key -n MouseDrag1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -M'
+bind-key -n MouseDrag1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -M ; set -p -t {mouse} @mason_live 1'
 bind-key -n DoubleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-word ; run -d0.3 ; send -X copy-pipe-and-cancel'
 bind-key -n TripleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-line ; run -d0.3 ; send -X copy-pipe-and-cancel'
 unbind-key -T copy-mode -a
@@ -54,8 +54,10 @@ ${TYPING_KEYS}
 set-environment -g DISABLE_AUTOUPDATER 1
 bind-key -T copy-mode MouseDown1Pane send -X clear-selection
 bind-key -T copy-mode MouseDrag1Pane send -X begin-selection
-# At the bottom, copying also leaves the selection so Claude's output keeps flowing; scrolled back, it stays highlighted.
-bind-key -T copy-mode MouseDragEnd1Pane if -F '#{==:#{scroll_position},0}' 'send -X copy-pipe-and-cancel' 'send -X copy-pipe-no-clear'
+# A selection started from the live view goes back to it on letting go, even if Claude printed meanwhile (which moves
+# the view off the bottom), so Claude's output keeps flowing. Scrolled back first, or dragged past the edge to scroll
+# back (dragScroll clears @mason_live), it stays where it is, highlighted.
+bind-key -T copy-mode MouseDragEnd1Pane if -F '#{||:#{==:#{scroll_position},0},#{==:#{@mason_live},1}}' 'send -X copy-pipe-and-cancel ; set -pu -t {mouse} @mason_live' 'send -X copy-pipe-no-clear'
 bind-key -T copy-mode DoubleClick1Pane send -X select-word \\; run -d0.3 \\; send -X copy-pipe-no-clear
 bind-key -T copy-mode TripleClick1Pane send -X select-line \\; run -d0.3 \\; send -X copy-pipe-no-clear
 `
@@ -209,7 +211,7 @@ export function scroll(name: string, lines: number): void {
     } else if (lines > 0) move()
     else {
       scrolled.add(name)
-      run(['copy-mode', '-e', '-t', name], move)
+      run(['set-option', '-pu', '-t', name, '@mason_live'], () => run(['copy-mode', '-e', '-t', name], move))
     }
   })
 }
@@ -220,7 +222,7 @@ export function dragScroll(name: string, lines: number): void {
   if (!TMUX || !NAME_RE.test(name) || !Number.isFinite(lines) || !lines) return
   const n = String(Math.min(20, Math.abs(lines | 0) || 1))
   scrolled.add(name)
-  execFile(TMUX, [...baseArgs(), 'if-shell', '-F', '-t', name, '#{pane_in_mode}', `send-keys -t ${name} -X -N ${n} ${lines < 0 ? 'cursor-up' : 'cursor-down'}`], { timeout: 5000, env: cleanEnv() }, () => {})
+  execFile(TMUX, [...baseArgs(), 'if-shell', '-F', '-t', name, '#{pane_in_mode}', `send-keys -t ${name} -X -N ${n} ${lines < 0 ? 'cursor-up' : 'cursor-down'} ; set -pu -t ${name} @mason_live`], { timeout: 5000, env: cleanEnv() }, () => {})
 }
 
 // A text selection made with the mouse puts the pane in copy mode too, so typing should leave it the same way.
