@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Mason: a home for all your Claude Code sessions.">
+<meta name="description" content="Mason: an ADHD-friendly, calm, organized-by-default home for all your Claude Code sessions.">
 <style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Mason</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,9 +47,7 @@ p { margin: 0; text-wrap: pretty; }
 .hero { display: grid; gap: 18px; }
 .hero { container-type: inline-size; }
 .hero h1 { font-size: clamp(40px, 8vw, 58px); line-height: 1.08; font-weight: 300; }
-/* Wide enough: the sentence under the headline stays on one line. */
-@container (min-width: 800px) { .hero p { white-space: nowrap; max-width: none; } }
-.hero p { font-size: 18px; color: var(--ink-soft); max-width: 34em; }
+.hero p { font-size: 18px; color: var(--ink-soft); max-width: 40em; }
 .meta { font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
 
 /* Mock of the Quiet list: mirrors the app's own styles */
@@ -97,6 +95,22 @@ p { margin: 0; text-wrap: pretty; }
 @media (max-width: 520px) { .m-theme { display: none; } }
 .caption { font-size: 13px; color: var(--muted); padding: 12px 18px 14px; border-top: 1px solid var(--edge); }
 @media (max-width: 520px) { .m-pills { display: none; } .mock-in { padding-inline: 12px; } .m-body { padding-left: 8px; } }
+
+/* Screenshot carousel: swipe or scroll sideways, or use the arrows and pips */
+.shots { gap: 14px; }
+.track { display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; padding: 4px 2px 40px; margin: -4px -2px -26px; }
+.track::-webkit-scrollbar { display: none; }
+.track > .mock { flex: 0 0 100%; scroll-snap-align: center; display: flex; flex-direction: column; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06); }
+.track > .mock .caption { margin-top: auto; }
+.shot-nav { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.arrow { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--edge); background: var(--card); color: var(--ink-soft); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.arrow svg { width: 13px; height: 13px; }
+.arrow:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
+.arrow:disabled { opacity: 0.35; cursor: default; }
+.arrow:focus-visible, .pips button:focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+.pips { display: flex; gap: 8px; }
+.pips button { width: 7px; height: 7px; border-radius: 50%; border: 0; padding: 0; background: var(--faint); cursor: pointer; }
+.pips button[aria-current="true"] { background: var(--ink); }
 
 /* Mock of the Open tab */
 .o-bar { text-align: right; font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
@@ -192,11 +206,12 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
   <header class="hero">
     <div class="mark"><b>m.</b> &nbsp;Mason</div>
     <h1>A home for all your Claude Code&nbsp;sessions</h1>
+    <p>An ADHD-friendly, calm, and organized-by-default replacement for the Claude app. Add persistent notes, rename windows, and easily spin off ideas into new chats. Customize your window view, never miss a session that needs you, and easily quiet everything that you don’t want to pay attention to.</p>
+    <p>New sessions created in Mason are automatically nested into projects based on their topics, and sessions in a git worktree join their main project.</p>
   </header>
 
-  <section class="ruled">
-    <h2>Every project in its place</h2>
-    <p class="lede">Sessions sort themselves into projects by folder, and sessions in a git worktree join their main project.<br>Open the project you're working on and fold the rest away. A closed project still shows when something inside it needs you.</p>
+  <section class="ruled shots" aria-roledescription="carousel" aria-label="Screenshots">
+    <div class="track" id="shots">
     <figure class="mock" aria-label="Example of Mason's project list">
       <div class="mock-chrome"><i></i><i></i><i></i></div>
       <div class="mock-in">
@@ -219,49 +234,6 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
       </div>
       <p class="caption">An example list. Green is working, grey is idle, and a session that needs you lights up.</p>
     </figure>
-  </section>
-
-  <section>
-    <h2>Mason holds what your head drops and only raises what needs&nbsp;you</h2>
-    <div class="groups">
-      <div class="group">
-        <h3>See everything at a glance</h3>
-        <ul>
-          <li>Every session in one list, grouped by project</li>
-          <li>Highlighted when one needs you, sorted to the top and badged in the Dock</li>
-          <li>Find any past conversation and pick it back up</li>
-        </ul>
-      </div>
-      <div class="group">
-        <h3>Remember where you were</h3>
-        <ul>
-          <li>A two-line recap: what you were doing, and the next step</li>
-          <li><code>/pause</code> writes a handoff note before stopping</li>
-          <li>Notes on any session or project that never get lost</li>
-        </ul>
-      </div>
-      <div class="group">
-        <h3>Catch a thought fast</h3>
-        <ul>
-          <li><kbd>⌃⌥N</kbd> from any app: type, Enter, stored</li>
-          <li><code>/stash</code> keeps Claude's last reply or an idea</li>
-          <li>Everything lands in Saved, tagged with its session</li>
-        </ul>
-      </div>
-      <div class="group">
-        <h3>Never lose a session</h3>
-        <ul>
-          <li>Close the window or quit and Claude keeps working</li>
-          <li>Open several side by side, or Peek with <kbd>Space</kbd></li>
-          <li>Terminal sessions show up and can move in</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Made to fit the way you&nbsp;work</h2>
-    <p class="lede">Open several sessions at once and lay them out however your brain works best: in a grid, side by side, stacked, or one at a time. Keep projects together, put what's waiting first, or drag them into your own order. Mason remembers how you left it, so it's ready next time.</p>
     <figure class="mock" aria-label="Example of Mason's Open tab">
       <div class="mock-chrome"><i></i><i></i><i></i></div>
       <div class="mock-in">
@@ -290,6 +262,12 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
       </div>
       <p class="caption">Try the layout menu above. The outlined window is the one you're typing in.</p>
     </figure>
+    </div>
+    <div class="shot-nav">
+      <button type="button" class="arrow" id="shot-prev" aria-label="Previous screenshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l-4 4 4 4"/></svg></button>
+      <span class="pips" id="shot-pips"></span>
+      <button type="button" class="arrow" id="shot-next" aria-label="Next screenshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg></button>
+    </div>
   </section>
 
   <section id="install">
@@ -362,6 +340,27 @@ npm install</pre></li>
     wins.style.setProperty('--cols', cols[sel.value]);
     label.textContent = sel.options[sel.selectedIndex].text;
   });
+})();
+(() => {
+  const track = document.getElementById('shots'), slides = [...track.children], pips = document.getElementById('shot-pips');
+  const prev = document.getElementById('shot-prev'), next = document.getElementById('shot-next');
+  const go = i => track.scrollTo({ left: slides[i].offsetLeft - track.offsetLeft - 2 });
+  const dots = slides.map((_, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-label', 'Screenshot ' + (i + 1));
+    b.addEventListener('click', () => go(i));
+    pips.append(b); return b;
+  });
+  let at = 0;
+  const sync = () => {
+    at = Math.round(track.scrollLeft / (slides[1].offsetLeft - slides[0].offsetLeft));
+    dots.forEach((d, i) => d.setAttribute('aria-current', i === at));
+    prev.disabled = at === 0; next.disabled = at === slides.length - 1;
+  };
+  prev.addEventListener('click', () => go(Math.max(0, at - 1)));
+  next.addEventListener('click', () => go(Math.min(slides.length - 1, at + 1)));
+  track.addEventListener('scroll', sync, { passive: true });
+  sync();
 })();
 </script>
 
