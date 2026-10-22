@@ -145,9 +145,6 @@ p { margin: 0; text-wrap: pretty; }
 .w-term .k { color: #8e8e93; }
 .w-term .a { color: #e8a48f; }
 .w-term .g { color: #7fcf9f; }
-/* A narrow window keeps its title readable: the second chip, focus, and expand step aside */
-.win { container-type: inline-size; }
-@container (max-width: 340px) { .w-bar .icons svg:first-child, .w-bar .icons svg:nth-child(4) { display: none; } }
 @media (max-width: 520px) { .wins { --cols: 1 !important; } .win:nth-of-type(n+4) { display: none; } }
 
 /* Sections */
