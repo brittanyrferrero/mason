@@ -822,6 +822,76 @@ export function App() {
         )
       })()}
       <div className="dragbar" aria-hidden="true" />
+      {/* Above the tab row: a new Claude Code, and an update for Mason. Quiet, out of the way of the view controls. */}
+      {(state?.claudeUpdate || state?.update) && (
+        <div className="top-notes">
+          {/* One quiet line for a new Claude Code, instead of a notice in every window. */}
+          {state?.claudeUpdate && (
+            <span
+              className="claude-update"
+              title={
+                state.claudeAuto
+                  ? `Claude ${state.claudeUpdate.latest} is installed. Mason restarts its sessions onto it once each has been idle for 10 minutes with nothing typed in its prompt, keeping the conversation.` +
+                    (state.claudeUpdate.behindTerminal ? ` Sessions in Terminal need restarting there.` : '')
+                  : `Claude ${state.claudeUpdate.latest} is installed. A session uses it once you end and resume it. Turn on “Claude updates” below to have Mason do it when sessions are idle.`
+              }
+            >
+              new Claude ·{' '}
+              {state.claudeAuto && state.claudeUpdate.behindHere
+                ? `${state.claudeUpdate.behindHere} switch over when idle`
+                : `${state.claudeUpdate.behindHere + state.claudeUpdate.behindTerminal} to restart`}
+              {state.claudeAuto && state.claudeUpdate.behindTerminal ? ` · ${state.claudeUpdate.behindTerminal} in Terminal` : ''}
+            </span>
+          )}
+          {state?.update && (
+            <button
+              className="update-btn"
+              type="button"
+              aria-expanded={updateOpen}
+              // Hovering shows what's new; clicking opens the card with Update now.
+              title={['What’s new:', ...state.update.notes.map((n) => `• ${n}`), ...(state.update.count > state.update.notes.length ? [`• and ${state.update.count - state.update.notes.length} more`] : []), '', 'Click to update'].join('\n')}
+              onClick={() => setUpdateOpen((v) => !v)}
+            >
+              <span className="update-dot" aria-hidden="true" />
+              Update
+            </button>
+          )}
+          {updateOpen && state?.update && (
+            <div className="update-pop" role="dialog" aria-label="Update Mason">
+              <h4>What’s new</h4>
+              <ul>
+                {state.update.notes.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+                {state.update.count > state.update.notes.length && <li className="muted">and {state.update.count - state.update.notes.length} more</li>}
+              </ul>
+              {updating ? (
+                <p className="help-note">Updating… Mason will close and reopen in a minute or two. Your sessions keep running.</p>
+              ) : (
+                <>
+                  <p className="help-note">Mason rebuilds itself and reopens. Your sessions keep running.</p>
+                  <div className="update-actions">
+                    <button
+                      className="update-go"
+                      type="button"
+                      onClick={async () => {
+                        const r = await window.mason.runUpdate()
+                        if (r.ok) setUpdating(true)
+                        else flashNote({ text: r.error ?? 'Couldn’t start the update.', tone: 'muted' })
+                      }}
+                    >
+                      Update now
+                    </button>
+                    <button className="link" type="button" onClick={() => setUpdateOpen(false)}>
+                      Later
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <nav className="tabs" role="tablist">
         <button className="tab" role="tab" type="button" aria-selected={view === 'projects'} onClick={() => setView('projects')}>
           Projects
@@ -829,7 +899,7 @@ export function App() {
         <button className="tab" role="tab" type="button" aria-selected={view === 'open'} disabled={!windows.length} onClick={() => setView('open')}>
           Open <span className="count">{windows.length}</span>
         </button>
-        {/* In the tab row, beside ? and Update, so the Open tab keeps that line for windows. */}
+        {/* In the tab row, beside ?, so the Open tab keeps that line for windows. */}
         {view === 'open' && (n > 1 || openProjects.length > 1) && (
           <p className="desk-bar">
             {n} sessions{' '}
@@ -841,71 +911,6 @@ export function App() {
             viewed <Pick label="Layout" value={layout} options={LAYOUTS} onChange={(v) => (setLayout(v), setTick((t) => t + 1))} /> organized{' '}
             <Pick label="Order" value={sort} options={SORTS} onChange={(v) => (setSort(v), setTick((t) => t + 1))} />
           </p>
-        )}
-        {/* One quiet line for a new Claude Code, instead of a notice in every window. */}
-        {state?.claudeUpdate && (
-          <span
-            className="claude-update"
-            title={
-              state.claudeAuto
-                ? `Claude ${state.claudeUpdate.latest} is installed. Mason restarts its sessions onto it once each has been idle for 10 minutes with nothing typed in its prompt, keeping the conversation.` +
-                  (state.claudeUpdate.behindTerminal ? ` Sessions in Terminal need restarting there.` : '')
-                : `Claude ${state.claudeUpdate.latest} is installed. A session uses it once you end and resume it. Turn on “Claude updates” below to have Mason do it when sessions are idle.`
-            }
-          >
-            new Claude ·{' '}
-            {state.claudeAuto && state.claudeUpdate.behindHere
-              ? `${state.claudeUpdate.behindHere} switch over when idle`
-              : `${state.claudeUpdate.behindHere + state.claudeUpdate.behindTerminal} to restart`}
-            {state.claudeAuto && state.claudeUpdate.behindTerminal ? ` · ${state.claudeUpdate.behindTerminal} in Terminal` : ''}
-          </span>
-        )}
-        {state?.update && (
-          <button
-            className="update-btn"
-            type="button"
-            aria-expanded={updateOpen}
-            // Hovering shows what's new; clicking opens the card with Update now.
-            title={['What’s new:', ...state.update.notes.map((n) => `• ${n}`), ...(state.update.count > state.update.notes.length ? [`• and ${state.update.count - state.update.notes.length} more`] : []), '', 'Click to update'].join('\n')}
-            onClick={() => setUpdateOpen((v) => !v)}
-          >
-            <span className="update-dot" aria-hidden="true" />
-            Update
-          </button>
-        )}
-        {updateOpen && state?.update && (
-          <div className="update-pop" role="dialog" aria-label="Update Mason">
-            <h4>What’s new</h4>
-            <ul>
-              {state.update.notes.map((n, i) => (
-                <li key={i}>{n}</li>
-              ))}
-              {state.update.count > state.update.notes.length && <li className="muted">and {state.update.count - state.update.notes.length} more</li>}
-            </ul>
-            {updating ? (
-              <p className="help-note">Updating… Mason will close and reopen in a minute or two. Your sessions keep running.</p>
-            ) : (
-              <>
-                <p className="help-note">Mason rebuilds itself and reopens. Your sessions keep running.</p>
-                <div className="update-actions">
-                  <button
-                    className="update-go"
-                    type="button"
-                    onClick={async () => {
-                      const r = await window.mason.runUpdate()
-                      if (r.ok) setUpdating(true)
-                      else flashNote({ text: r.error ?? 'Couldn’t start the update.', tone: 'muted' })
-                    }}
-                  >
-                    Update now
-                  </button>
-                  <button className="link" type="button" onClick={() => setUpdateOpen(false)}>
-                    Later
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         )}
         <button className="keys-btn" type="button" aria-expanded={keysOpen} aria-label="Help and shortcuts" title="Help and shortcuts (?)" onClick={() => setKeysOpen((v) => !v)}>
           <span className="help-q">?</span>

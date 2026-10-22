@@ -425,8 +425,12 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 @keyframes armed-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .armed-tag { animation: none; } }
 
-/* A newer Claude Code is installed: one quiet line in the tab row, never a notice per window. */
-.tabs .claude-update { align-self: center; margin-left: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* Above the tab row, on the right: a newer Claude Code ("new Claude · …") and Mason's Update button. */
+.top-notes { position: relative; z-index: 31; display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: -4px 0 6px; -webkit-app-region: no-drag; }
+.top-notes * { -webkit-app-region: no-drag; }
+.top-notes .claude-update { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.top-notes .update-btn { margin-left: 0; }
+.top-notes .update-pop { right: 0; }
 
 /* The model chip is a menu while the session is idle: a plain Mac menu laid invisibly over the chip. */
 .model-chip { position: relative; }
