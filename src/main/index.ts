@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { watchDebugRequests } from './debugSnapshot'
-import { autoUpdateOn, noteTyping, startClaudeUpdater, updateView } from './claudeUpdates'
+import { autoUpdateOn, modelOf, noteTyping, restartSession, startClaudeUpdater, updateView } from './claudeUpdates'
 import { existsSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -412,9 +412,36 @@ app.whenReady().then(() => {
     if (shell) return { host: shell.name }
     const s = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
     if (!s?.cwd || !existsSync(s.cwd)) return { error: 'Its folder no longer exists.' }
-    const host = startSession(s.cwd, id)
+    const host = startSession(s.cwd, id, undefined, false, modelOf(db, id))
     refreshSoon(false)
     return { host }
+  })
+
+  // Switch a session's model: restart it with --model, keeping the conversation and anything typed in its prompt.
+  // Only while it's idle and inside Mason (a session in Terminal can't be restarted from here).
+  const MODEL_IDS: Record<string, string> = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-1' }
+  const switching = new Set<string>()
+  ipcMain.handle('session:model', async (e, id: unknown, model: unknown) => {
+    if (!trusted(e) || typeof id !== 'string' || !SESSION_ID_RE.test(id) || typeof model !== 'string' || !(model in MODEL_IDS)) return { error: 'bad request' }
+    const live = readLive().get(id)
+    const host = live && (listHosted().find((h) => h.name === live.tmux) ?? (live.tty ? listHosted().find((h) => h.tty === live.tty) : undefined))
+    if (!live || !host) return { error: 'Only sessions running inside Mason can switch models.' }
+    if (live.copies > 1) return { error: 'That conversation is running in more than one place.' }
+    if (live.status !== 'idle' || readEvents().has(id)) return { error: 'Switch once Claude has finished and isn’t waiting on you.' }
+    if (switching.has(id)) return { error: 'Already switching.' }
+    switching.add(id)
+    try {
+      const result = await restartSession(host.name, id, live.pid, readLive, { model, keepDraft: true })
+      if (result === 'skipped') return { error: 'Couldn’t read its prompt safely, so it was left as it was.' }
+      if (result === 'failed') return { error: 'The switch didn’t finish. Open the window to check on it.' }
+      // Show the new model straight away; Claude's next reply confirms it.
+      db.prepare('UPDATE sessions SET model = ? WHERE id = ?').run(MODEL_IDS[model], id)
+      if (result === 'draft-not-restored') return { error: 'Switched, but your draft didn’t come back. It’s saved in ~/.mason/drafts.' }
+      return { ok: true }
+    } finally {
+      switching.delete(id)
+      refreshSoon(false)
+    }
   })
 
   // Move a session that's running in a Terminal window into Mason: stop it there, resume the same conversation here.
@@ -429,7 +456,7 @@ app.whenReady().then(() => {
     if (already) return { host: already.name }
     process.kill(live.pid, 'SIGTERM')
     if (!(await waitForExit(live.pid, 6000))) return { error: 'It didn’t stop in time. Try again in a moment.' }
-    const host = startSession(cwd, id)
+    const host = startSession(cwd, id, undefined, false, modelOf(db, id))
     refreshSoon(false)
     return { host }
   })

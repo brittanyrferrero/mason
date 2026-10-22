@@ -1006,11 +1006,7 @@ export function App() {
                       {footers[w.host]!.mode}
                     </span>
                   )}
-                  {w.model && (
-                    <span className="mode-chip model-chip" title={`Model: ${w.model}`}>
-                      {modelName(w.model)}
-                    </span>
-                  )}
+                  {w.model && <ModelChip model={w.model} sid={w.sid} ready={!!w.sid && !w.working && !w.needs} onNote={(text) => flashNote({ text, tone: 'muted' })} />}
                   <span className="bar-gap" />
                   {ending === w.host ? (
                     <>
@@ -1821,6 +1817,41 @@ function Scratch({ initial }: { initial: string }) {
 
 // A dropdown that reads as part of a sentence: the current words and a small chevron, with the native
 // select laid invisibly on top so it sizes to the words, not to its longest option.
+// The model chip is a menu: pick another model and Mason restarts the session with it (claude --resume --model),
+// keeping the conversation and anything typed in the prompt. Offered while Claude is idle and not waiting on you.
+const MODELS: [string, string][] = [
+  ['opus', 'Opus'],
+  ['sonnet', 'Sonnet'],
+  ['haiku', 'Haiku'],
+  ['fable', 'Fable (uses extra credits)']
+]
+function ModelChip({ model, sid, ready, onNote }: { model: string; sid: string | null; ready: boolean; onNote: (text: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const family = /^claude-(opus|sonnet|haiku|fable)/.exec(model)?.[1] ?? ''
+  const pick = async (next: string) => {
+    if (!sid || next === family) return
+    setBusy(true)
+    const r = await window.mason.setModel(sid, next)
+    setBusy(false)
+    if (r.error) onNote(r.error)
+  }
+  return (
+    <label className={`mode-chip model-chip ${ready && !busy ? 'switchable' : ''}`} title={busy ? 'Switching…' : ready ? `Model: ${model}. Pick another to switch; the conversation carries on.` : `Model: ${model}. You can switch once Claude has finished.`}>
+      {busy ? 'switching…' : modelName(model)}
+      {ready && !busy && (
+        <select aria-label="Model" value={family} onChange={(e) => pick(e.target.value)}>
+          {!family && <option value="">{modelName(model)}</option>}
+          {MODELS.map(([v, text]) => (
+            <option key={v} value={v}>
+              {text}
+            </option>
+          ))}
+        </select>
+      )}
+    </label>
+  )
+}
+
 function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
     <label className="pick">

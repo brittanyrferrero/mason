@@ -1,3 +1,4 @@
+import { modelOf } from './claudeUpdates'
 import { existsSync } from 'node:fs'
 import type { DB } from './db'
 import { readLive } from './live'
@@ -71,7 +72,7 @@ export function reopenAfterRestart(db: DB): number {
     const r = db.prepare('SELECT cwd FROM sessions WHERE id = ?').get(id) as { cwd: string | null } | undefined
     if (!r?.cwd || !existsSync(r.cwd)) continue
     try {
-      startSession(r.cwd, id)
+      startSession(r.cwd, id, undefined, false, modelOf(db, id))
       n++
     } catch {}
   }

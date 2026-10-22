@@ -139,14 +139,18 @@ export function setTerminalProject(name: string, projectId: number): boolean {
 }
 
 // worktree: start Claude in a fresh worktree of this repo (see worktrees.ts).
-export function startSession(cwd: string, resumeId?: string, briefPath?: string, worktree = false): string {
+// A model alias ("sonnet") or a full name ("claude-sonnet-5-5"). Anything else is ignored rather than typed into a shell.
+export const MODEL_RE = /^(?:opus|sonnet|haiku|fable|claude-[a-z0-9-]{3,60})$/
+// model: start (or resume) with this model rather than your default. Resuming keeps a session's model this way.
+export function startSession(cwd: string, resumeId?: string, briefPath?: string, worktree = false, model?: string): string {
   if (resumeId && !SESSION_ID_RE.test(resumeId)) throw new Error('bad session id')
+  const withModel = model && MODEL_RE.test(model) ? ` --model ${model}` : ''
   const name = `ms-${randomBytes(4).toString('hex')}`
   tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '120', '-y', '36'])
   if (resumeId) tmux(['set-option', '-t', name, '@mason_resume', resumeId])
   // A fresh start from a handoff hands Claude the brief as its first message, read from a file so nothing needs quoting.
   const first = briefPath ? ` "$(cat '${briefPath.replace(/'/g, `'\\''`)}')"` : ''
-  tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}` : `claude${worktree ? ' --worktree' : ''}${first}`])
+  tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}${withModel}` : `claude${withModel}${worktree ? ' --worktree' : ''}${first}`])
   tmux(['send-keys', '-t', name, 'Enter'])
   return name
 }

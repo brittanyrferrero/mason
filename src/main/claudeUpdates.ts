@@ -6,7 +6,7 @@ import type { DB } from './db'
 import { DATA_DIR } from './db'
 import type { Need } from './events'
 import type { LiveInfo } from './live'
-import { capturePane, listHosted, pasteText, sendLine } from './tmux'
+import { capturePane, listHosted, MODEL_RE, pasteText, sendLine } from './tmux'
 
 // When Claude Code updates itself, every running session keeps the old version until it's restarted, and each one
 // says so in its footer. Instead, Mason quietly restarts its own sessions onto the new version once they've been idle
@@ -94,9 +94,23 @@ const gone = (pid: number) => {
 
 export type RestartResult = 'restarted' | 'restarted-draft' | 'skipped' | 'draft-not-restored' | 'failed'
 
-export async function restartSession(name: string, sid: string, pid: number, readLive: () => Map<string, LiveInfo>): Promise<RestartResult> {
+// The model a session last answered with, so restarting or resuming it keeps that model instead of your default.
+export function modelOf(db: DB, sid: string): string | undefined {
+  const m = (db.prepare('SELECT model FROM sessions WHERE id = ?').get(sid) as { model: string | null } | undefined)?.model
+  return m && MODEL_RE.test(m) ? m : undefined
+}
+
+// model: restart with this model. keepDraft: restart even with something typed in the prompt, and put it back
+// (used when you asked for the restart yourself; the automatic update restarts never touch a draft).
+export async function restartSession(
+  name: string,
+  sid: string,
+  pid: number,
+  readLive: () => Map<string, LiveInfo>,
+  opts: { model?: string; keepDraft?: boolean } = {}
+): Promise<RestartResult> {
   const draft = readDraft(name)
-  if (draft === null || draft) return 'skipped'
+  if (draft === null || (draft && !opts.keepDraft)) return 'skipped'
   // Keep a copy of the draft no matter what happens next.
   let saved = ''
   if (draft) {
@@ -107,7 +121,7 @@ export async function restartSession(name: string, sid: string, pid: number, rea
   process.kill(pid, 'SIGTERM')
   if (!(await waitFor(() => gone(pid), 10_000))) return 'failed'
   await new Promise((r) => setTimeout(r, 500)) // let the shell print its prompt
-  sendLine(name, `claude --resume ${sid}`)
+  sendLine(name, `claude --resume ${sid}${opts.model && MODEL_RE.test(opts.model) ? ` --model ${opts.model}` : ''}`)
   const back = await waitFor(() => {
     const l = readLive().get(sid)
     return !!l && l.pid !== pid && readDraft(name) !== null
@@ -169,7 +183,7 @@ export function startClaudeUpdater(opts: {
     const [sid, l, name] = ready
     busy = true
     try {
-      const result = await restartSession(name, sid, l.pid, opts.readLive)
+      const result = await restartSession(name, sid, l.pid, opts.readLive, { model: modelOf(opts.db, sid) })
       if (result === 'skipped' || result === 'failed') backoff.set(sid, Date.now() + RETRY_MS)
       if (result === 'draft-not-restored') opts.notice('A session restarted onto the new Claude, but its draft didn’t come back. It’s saved in ~/.mason/drafts.')
       if (result === 'failed') opts.notice('Couldn’t restart a session onto the new Claude. It’s still running as it was.')

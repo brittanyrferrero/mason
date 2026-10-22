@@ -409,3 +409,9 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 
 /* A newer Claude Code is installed: one quiet line in the tab row, never a notice per window. */
 .tabs .claude-update { align-self: center; margin-left: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* The model chip is a menu while the session is idle: a plain Mac menu laid invisibly over the chip. */
+.model-chip { position: relative; }
+.model-chip.switchable { cursor: pointer; }
+.model-chip.switchable:hover { color: #f2f2f7; border-color: rgba(255, 255, 255, 0.3); }
+.model-chip select { position: absolute; inset: 0; opacity: 0; cursor: pointer; font: inherit; }
