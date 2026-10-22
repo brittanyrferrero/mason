@@ -82,25 +82,28 @@ export function Term({
     host.addEventListener('paste', onPaste, true)
     // Dragging selects text, and tmux does the selecting so it can run back through the history. Held past the top
     // or bottom edge, the view keeps scrolling. Letting go copies; a small "Copied" shows so you know it worked.
-    let drag: { moved: boolean; dir: number; timer: number } | null = null
+    let drag: { moved: boolean; dir: number; timer: number; speed: number } | null = null
     let copiedTimer = 0
     const stopAuto = () => {
       if (drag?.timer) clearInterval(drag.timer)
       if (drag) drag.timer = drag.dir = 0
     }
     const onDown = (e: MouseEvent) => {
-      if (e.button === 0 && !e.altKey && t.modes.mouseTrackingMode !== 'none') drag = { moved: false, dir: 0, timer: 0 }
+      if (e.button === 0 && !e.altKey && t.modes.mouseTrackingMode !== 'none') drag = { moved: false, dir: 0, timer: 0, speed: 1 }
     }
     const onMove = (e: MouseEvent) => {
       if (!drag) return
       drag.moved = true
       const r = host.getBoundingClientRect()
       const dir = e.clientY < r.top + 6 ? -1 : e.clientY > r.bottom - 6 ? 1 : 0
+      // The further past the edge you hold the mouse, the faster it runs: 1 line a tick at the edge, up to 8.
+      const past = dir < 0 ? r.top + 6 - e.clientY : dir > 0 ? e.clientY - (r.bottom - 6) : 0
+      drag.speed = Math.min(8, 1 + Math.floor(past / 24))
       if (dir === drag.dir) return
       stopAuto()
       if (dir) {
         drag.dir = dir
-        drag.timer = window.setInterval(() => window.mason.scroll(client, dir), 110)
+        drag.timer = window.setInterval(() => drag && window.mason.dragScroll(client, drag.dir * drag.speed), 90)
       }
     }
     const onUp = (e: MouseEvent) => {

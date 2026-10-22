@@ -180,6 +180,15 @@ export function scroll(name: string, lines: number): void {
   run(['copy-mode', '-e', '-t', name], move)
 }
 
+// Dragging a selection past the top or bottom edge: move tmux's cursor, which scrolls the history and grows the
+// selection with it. (Scrolling the view instead leaves the selection where it was.) Only acts mid-selection.
+export function dragScroll(name: string, lines: number): void {
+  if (!TMUX || !NAME_RE.test(name) || !Number.isFinite(lines) || !lines) return
+  const n = String(Math.min(20, Math.abs(lines | 0) || 1))
+  scrolled.add(name)
+  execFile(TMUX, [...baseArgs(), 'if-shell', '-F', '-t', name, '#{pane_in_mode}', `send-keys -t ${name} -X -N ${n} ${lines < 0 ? 'cursor-up' : 'cursor-down'}`], { timeout: 5000, env: cleanEnv() }, () => {})
+}
+
 // A text selection made with the mouse puts the pane in copy mode too, so typing should leave it the same way.
 export function selecting(name: string): void {
   if (NAME_RE.test(name)) scrolled.add(name)
