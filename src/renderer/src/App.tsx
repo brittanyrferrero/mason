@@ -205,6 +205,14 @@ export function App() {
   // Hand-twirled exceptions: projects closed while not shushed, or opened while shushed.
   const [closed, setClosed] = useState<Set<number>>(new Set())
   const [opened, setOpened] = useState<Set<number>>(new Set())
+  // Open tab, "by project": projects twirled up there, by name. Their windows stay mounted, just hidden.
+  const [folded, setFolded] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(stored('openFolded', '[]')))
+    } catch {
+      return new Set()
+    }
+  })
   const [cursor, setCursor] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -272,6 +280,7 @@ export function App() {
   }, [layout])
   useEffect(() => store('order', JSON.stringify(order)), [order])
   useEffect(() => store('openProject', only), [only])
+  useEffect(() => store('openFolded', JSON.stringify([...folded])), [folded])
 
   useEffect(() => {
     store('shush', shushed ? 'on' : 'off')
@@ -575,17 +584,39 @@ export function App() {
     return g
   }, [shown])
   const grouped = (sort === 'project' || sort === 'busy') && !one && !only && groups.length > 1
-  const widest = grouped ? Math.max(...groups.map((g) => g.hosts.length)) : n
+  const isFolded = (project: string) => grouped && !!project && folded.has(project)
+  const fold = (project: string) => {
+    const tucking = !folded.has(project)
+    setFolded((f) => {
+      const next = new Set(f)
+      next.has(project) ? next.delete(project) : next.add(project)
+      return next
+    })
+    // Twirling up the project you're in hands focus to the next window that's still showing.
+    if (tucking && windows.find((w) => w.host === focusHost)?.project === project) {
+      const next = shown.find((w) => w.project !== project && !isFolded(w.project))
+      if (next) setFocusHost(next.host)
+    }
+  }
+  // Opening (or switching to) a window in a twirled-up project brings the project back down.
+  useEffect(() => {
+    const p = windows.find((w) => w.host === focusHost)?.project
+    if (p && folded.has(p)) setFolded((f) => new Set([...f].filter((x) => x !== p)))
+  }, [focusHost])
+  const unfolded = groups.filter((g) => !isFolded(g.project))
+  const widest = grouped ? Math.max(1, ...unfolded.map((g) => g.hosts.length)) : n
   const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, widest) : widest <= 1 ? 1 : widest === 2 || widest === 4 ? 2 : 3
-  const rows = grouped ? groups.map((g) => `auto repeat(${Math.ceil(g.hosts.length / cols)}, var(--row))`).join(' ') : undefined
-  const headingFor = new Map(grouped ? groups.map((g) => [g.hosts[0], g.project || 'Starting']) : [])
+  const rows = grouped ? groups.map((g) => (isFolded(g.project) ? 'auto' : `auto repeat(${Math.ceil(g.hosts.length / cols)}, var(--row))`)).join(' ') : undefined
+  const headingFor = new Map(grouped ? groups.map((g) => [g.hosts[0], g]) : [])
 
   const closeWindow = (host: string) => setOpenHosts((hs) => hs.filter((h) => h !== host))
   const step = (dir: number) => {
-    if (!n) return
-    const i = shown.findIndex((w) => w.host === focusHost)
+    const reachable = shown.filter((w) => !isFolded(w.project))
+    const m = reachable.length
+    if (!m) return
+    const i = reachable.findIndex((w) => w.host === focusHost)
     reveal.current = true
-    setFocusHost(shown[(i < 0 ? 0 : i + dir + n) % n].host)
+    setFocusHost(reachable[(i < 0 ? 0 : i + dir + m) % m].host)
   }
   const showProject = (p: string) => {
     setOnly(p)
@@ -922,17 +953,36 @@ export function App() {
             const hidden = only && w.project && w.project !== only
             const focused = focusHost === w.host
             const drop = dropAt?.host === w.host ? (dropAt.after ? 'drop-after' : 'drop-before') : ''
-            const heading = headingFor.get(w.host)
+            const group = headingFor.get(w.host)
+            const twirled = isFolded(w.project)
+            const waiting = group ? windows.filter((x) => x.project === group.project && x.needs).length : 0
             return [
-              heading && (
-                <p className="group-name" key={`group:${heading}`}>
-                  {heading}
-                </p>
-              ),
+              group &&
+                (group.project ? (
+                  <button className="group-name" type="button" key={`group:${group.project}`} aria-expanded={!twirled} title={twirled ? 'Show this project’s windows' : 'Twirl this project up'} onClick={() => fold(group.project)}>
+                    <Chevron />
+                    {group.project}
+                    {twirled &&
+                      (waiting ? (
+                        <span className="group-hint wait">
+                          <span className="dot needs" />
+                          {waiting} waiting
+                        </span>
+                      ) : (
+                        <span className="group-hint">
+                          {group.hosts.length} {group.hosts.length === 1 ? 'window' : 'windows'}
+                        </span>
+                      ))}
+                  </button>
+                ) : (
+                  <p className="group-name" key="group:">
+                    Starting
+                  </p>
+                )),
               <div
                 key={w.host}
                 data-host={w.host}
-                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${armed === w.host ? 'armed' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''} ${n > 1 && !one && !focused && Date.now() - (left[w.host] ?? 0) < 5 * 60_000 ? 'recent' : ''} ${n > 1 && !one && !focused && resting(w) ? 'resting' : ''}`}
+                className={`win ${focused && n > 1 && !one ? 'focused' : ''} ${armed === w.host ? 'armed' : ''} ${spot && !one ? (spot === w.host ? 'spot' : 'dim') : ''} ${(one && !focused) || hidden || twirled ? 'gone' : ''} ${dragging === w.host ? 'dragging' : ''} ${drop} ${big === w.host ? 'expanded' : ''} ${n > 1 && !one && !focused && Date.now() - (left[w.host] ?? 0) < 5 * 60_000 ? 'recent' : ''} ${n > 1 && !one && !focused && resting(w) ? 'resting' : ''}`}
                 onFocusCapture={() => (touch(w.host), setFocusHost(w.host))}
                 onKeyDownCapture={() => touch(w.host)}
                 onDragOver={(e) => {
