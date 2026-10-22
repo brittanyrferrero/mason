@@ -831,7 +831,7 @@ export function App() {
               className="claude-update"
               title={
                 state.claudeAuto
-                  ? `Claude ${state.claudeUpdate.latest} is installed. Mason restarts its sessions onto it once each has been idle for 10 minutes with nothing typed in its prompt, keeping the conversation.` +
+                  ? `Claude ${state.claudeUpdate.latest} is installed. Mason restarts its sessions onto it once each has been idle for 10 minutes, keeping the conversation and anything you'd typed in its prompt.` +
                     (state.claudeUpdate.behindTerminal ? ` Sessions in Terminal need restarting there.` : '')
                   : `Claude ${state.claudeUpdate.latest} is installed. A session uses it once you end and resume it. Turn on “Claude updates” below to have Mason do it when sessions are idle.`
               }

@@ -10,9 +10,9 @@ import { capturePane, listHosted, MODEL_RE, pasteText, sendLine } from './tmux'
 
 // When Claude Code updates itself, every running session keeps the old version until it's restarted, and each one
 // says so in its footer. Instead, Mason quietly restarts its own sessions onto the new version once they've been idle
-// for a while, keeping the conversation (claude --resume) and putting back anything you'd half-typed in the prompt.
-// A session with something typed in its prompt is left alone (you're mid-thought, and may come back to send it), and
-// so is one whose prompt Mason can't read cleanly.
+// for a while, keeping the conversation (claude --resume) and putting back anything you'd half-typed in the prompt
+// (a copy is saved in ~/.mason/drafts first). A session whose prompt Mason can't read cleanly is left alone.
+// The screen is cleared before resuming, so no "Resume this session with" leftovers sit in the window.
 
 const IDLE_MS = 10 * 60_000 // quiet this long (no Claude activity, no typing) before it's restarted
 const RETRY_MS = 30 * 60_000 // after a session couldn't be restarted, leave it alone this long
@@ -100,8 +100,7 @@ export function modelOf(db: DB, sid: string): string | undefined {
   return m && MODEL_RE.test(m) ? m : undefined
 }
 
-// model: restart with this model. keepDraft: restart even with something typed in the prompt, and put it back
-// (used when you asked for the restart yourself; the automatic update restarts never touch a draft).
+// model: restart with this model. keepDraft: restart even with something typed in the prompt, and put it back.
 export async function restartSession(
   name: string,
   sid: string,
@@ -121,7 +120,7 @@ export async function restartSession(
   process.kill(pid, 'SIGTERM')
   if (!(await waitFor(() => gone(pid), 10_000))) return 'failed'
   await new Promise((r) => setTimeout(r, 500)) // let the shell print its prompt
-  sendLine(name, `DISABLE_AUTOUPDATER=1 claude --resume ${sid}${opts.model && MODEL_RE.test(opts.model) ? ` --model ${opts.model}` : ''}`)
+  sendLine(name, `clear; DISABLE_AUTOUPDATER=1 claude --resume ${sid}${opts.model && MODEL_RE.test(opts.model) ? ` --model ${opts.model}` : ''}`)
   const back = await waitFor(() => {
     const l = readLive().get(sid)
     return !!l && l.pid !== pid && readDraft(name) !== null
@@ -197,7 +196,7 @@ export function startClaudeUpdater(opts: {
     const [sid, l, name] = ready
     busy = true
     try {
-      const result = await restartSession(name, sid, l.pid, opts.readLive, { model: modelOf(opts.db, sid) })
+      const result = await restartSession(name, sid, l.pid, opts.readLive, { model: modelOf(opts.db, sid), keepDraft: true })
       if (result === 'skipped' || result === 'failed') backoff.set(sid, Date.now() + RETRY_MS)
       if (result === 'draft-not-restored') opts.notice('A session restarted onto the new Claude, but its draft didn’t come back. It’s saved in ~/.mason/drafts.')
       if (result === 'failed') opts.notice('Couldn’t restart a session onto the new Claude. It’s still running as it was.')
