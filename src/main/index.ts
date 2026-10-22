@@ -619,9 +619,14 @@ app.whenReady().then(() => {
 
   // Updates: a quiet check now and then; updating only ever happens when you click.
   const checkUpdates = () => checkForUpdate().then((changed) => changed && refreshSoon(false))
+  // Every half hour, and when you come back to Mason (at most every 5 minutes), so the Update button turns up soon after
+  // a change lands rather than hours later.
+  let lastCheck = 0
+  const checkSoon = () => Date.now() - lastCheck > 5 * 60_000 && ((lastCheck = Date.now()), checkUpdates())
   if (!DEV_CHECK) {
-    setTimeout(checkUpdates, 30_000)
-    setInterval(checkUpdates, 6 * 60 * 60_000)
+    setTimeout(checkSoon, 30_000)
+    setInterval(checkSoon, 30 * 60_000)
+    app.on('browser-window-focus', checkSoon)
   }
   ipcMain.handle('update:check', async (e) => (trusted(e) ? (await checkForUpdate(), updateInfo()) : null))
   ipcMain.handle('update:run', (e) => (trusted(e) ? runUpdate((msg) => send('mason:notice', msg)) : { ok: false }))
