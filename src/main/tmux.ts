@@ -12,6 +12,17 @@ export const TMUX = ['/opt/homebrew/bin/tmux', '/usr/local/bin/tmux', '/usr/bin/
 const SOCKET = process.env.MASON_TMUX_SOCKET || 'mason'
 const CONF = join(DATA_DIR, 'tmux.conf')
 
+// Typing while scrolled back (tmux's copy mode) should just leave copy mode, never reach tmux's own copy-mode keys:
+// "f" there opens a "(jump forward)" prompt that swallows what you type next. Mason usually leaves copy mode before a
+// keystroke arrives; these catch the rest (e.g. a window left scrolled back across a restart). Only typing keys are
+// listed, so mouse selection and scrolling are untouched.
+const TYPING_KEYS = [
+  ...Array.from({ length: 94 }, (_, i) => String.fromCharCode(33 + i)).map((c) => (c === "'" ? `"'"` : `'${c}'`)),
+  'Space', 'Enter', 'BSpace', 'Tab', 'Escape', 'Up', 'Down', 'Left', 'Right', 'C-c', 'C-d', 'C-u', 'C-a', 'C-e', 'C-r', 'C-s'
+]
+  .map((k) => `bind-key -T copy-mode ${k} send -X cancel`)
+  .join('\n')
+
 const CONF_TEXT = `# Written by Mason. Invisible tmux: no status bar, no prefix key, so every keystroke goes to Claude.
 set -g status off
 set -g prefix None
@@ -36,6 +47,11 @@ bind-key -n MouseUp1Pane if -F '#{mouse_any_flag}' 'send -M'
 bind-key -n MouseDrag1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -M'
 bind-key -n DoubleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-word ; run -d0.3 ; send -X copy-pipe-and-cancel'
 bind-key -n TripleClick1Pane if -F '#{mouse_any_flag}' 'send -M' 'copy-mode -H ; send -X select-line ; run -d0.3 ; send -X copy-pipe-and-cancel'
+unbind-key -T copy-mode -a
+${TYPING_KEYS}
+# Sessions inside Mason don't update Claude themselves (so they never print "Update installed"); Mason runs
+# claude update on its own schedule and moves idle sessions over (claudeUpdates.ts).
+set-environment -g DISABLE_AUTOUPDATER 1
 bind-key -T copy-mode MouseDown1Pane send -X clear-selection
 bind-key -T copy-mode MouseDrag1Pane send -X begin-selection
 # At the bottom, copying also leaves the selection so Claude's output keeps flowing; scrolled back, it stays highlighted.
@@ -75,7 +91,16 @@ export function initTmux(): void {
   writeCopyScript() // the copy-command below runs it
   writeFileSync(CONF, CONF_TEXT, { mode: 0o600 })
   // A server that's already running (sessions outlive Mason) only read the config it started with.
-  if (TMUX) execFile(TMUX, [...baseArgs(), 'source-file', CONF], { timeout: 5000, env: cleanEnv() }, () => {})
+  if (TMUX)
+    execFile(TMUX, [...baseArgs(), 'source-file', CONF], { timeout: 5000, env: cleanEnv() }, () => {
+      // A window left scrolled back from before goes back to the live view, so typing reaches Claude again.
+      execFile(TMUX!, [...baseArgs(), 'list-panes', '-a', '-F', '#{pane_id} #{pane_in_mode}'], { timeout: 5000, env: cleanEnv() }, (_e, out) => {
+        for (const line of String(out ?? '').split('\n')) {
+          const [pane, inMode] = line.split(' ')
+          if (inMode === '1' && /^%\d+$/.test(pane)) execFile(TMUX!, [...baseArgs(), 'send-keys', '-t', pane, '-X', 'cancel'], { timeout: 5000, env: cleanEnv() }, () => {})
+        }
+      })
+    })
 }
 
 // resume: the conversation Mason started this shell for, so it can be named before Claude is up (or after it exits).
@@ -150,7 +175,7 @@ export function startSession(cwd: string, resumeId?: string, briefPath?: string,
   if (resumeId) tmux(['set-option', '-t', name, '@mason_resume', resumeId])
   // A fresh start from a handoff hands Claude the brief as its first message, read from a file so nothing needs quoting.
   const first = briefPath ? ` "$(cat '${briefPath.replace(/'/g, `'\\''`)}')"` : ''
-  tmux(['send-keys', '-t', name, '-l', resumeId ? `claude --resume ${resumeId}${withModel}` : `claude${withModel}${worktree ? ' --worktree' : ''}${first}`])
+  tmux(['send-keys', '-t', name, '-l', resumeId ? `DISABLE_AUTOUPDATER=1 claude --resume ${resumeId}${withModel}` : `DISABLE_AUTOUPDATER=1 claude${withModel}${worktree ? ' --worktree' : ''}${first}`])
   tmux(['send-keys', '-t', name, 'Enter'])
   return name
 }

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -121,7 +121,7 @@ export async function restartSession(
   process.kill(pid, 'SIGTERM')
   if (!(await waitFor(() => gone(pid), 10_000))) return 'failed'
   await new Promise((r) => setTimeout(r, 500)) // let the shell print its prompt
-  sendLine(name, `claude --resume ${sid}${opts.model && MODEL_RE.test(opts.model) ? ` --model ${opts.model}` : ''}`)
+  sendLine(name, `DISABLE_AUTOUPDATER=1 claude --resume ${sid}${opts.model && MODEL_RE.test(opts.model) ? ` --model ${opts.model}` : ''}`)
   const back = await waitFor(() => {
     const l = readLive().get(sid)
     return !!l && l.pid !== pid && readDraft(name) !== null
@@ -160,6 +160,19 @@ export function updateView(live: Map<string, LiveInfo>): ClaudeUpdateView {
   return b.latest && (b.here.length || b.terminal) ? { latest: b.latest, behindHere: b.here.length, behindTerminal: b.terminal } : null
 }
 
+// Sessions inside Mason don't update Claude themselves (see DISABLE_AUTOUPDATER in tmux.ts), so Mason does:
+// Claude's own updater, a couple of minutes after launch and every 6 hours.
+function keepClaudeUpdated(changed: () => void): void {
+  const run = () => {
+    if (!CLAUDE) return
+    const env = { ...process.env }
+    delete env.DISABLE_AUTOUPDATER
+    execFile(CLAUDE, ['update'], { timeout: 5 * 60_000, env }, () => changed())
+  }
+  setTimeout(run, 2 * 60_000)
+  setInterval(run, 6 * 60 * 60_000)
+}
+
 export function startClaudeUpdater(opts: {
   db: DB
   readLive: () => Map<string, LiveInfo>
@@ -167,6 +180,7 @@ export function startClaudeUpdater(opts: {
   notice: (text: string) => void
   changed: () => void
 }): void {
+  keepClaudeUpdated(opts.changed)
   setInterval(async () => {
     if (busy || !autoUpdateOn(opts.db)) return
     const live = opts.readLive()
