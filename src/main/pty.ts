@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import * as pty from 'node-pty'
 import { baseArgs, cleanEnv, NAME_RE, TMUX } from './tmux'
@@ -43,10 +44,27 @@ export function write(name: string, data: string): void {
   clients.get(name)?.write(data)
 }
 
+// After a window changes size (expanding it, say), the view can fall out of step with tmux: redraws meant for the old
+// size land in the wrong rows, and since tmux only sends what changed, the leftovers stay (a prompt line repeated
+// down the window). Once the size has settled, tmux repaints the whole view from its own correct copy of the screen.
+const repaint = new Map<string, NodeJS.Timeout>()
 export function resize(name: string, cols: number, rows: number): void {
+  const p = clients.get(name)
+  if (!p) return
   try {
-    clients.get(name)?.resize(Math.max(20, Math.min(400, cols | 0)), Math.max(5, Math.min(200, rows | 0)))
-  } catch {}
+    p.resize(Math.max(20, Math.min(400, cols | 0)), Math.max(5, Math.min(200, rows | 0)))
+  } catch {
+    return
+  }
+  clearTimeout(repaint.get(name))
+  repaint.set(
+    name,
+    setTimeout(() => {
+      repaint.delete(name)
+      const tty = (p as unknown as { ptsName?: string }).ptsName
+      if (TMUX && tty && clients.get(name) === p) execFile(TMUX, [...baseArgs(), 'refresh-client', '-t', tty], { timeout: 5000, env: cleanEnv() }, () => {})
+    }, 250)
+  )
 }
 
 export function detach(name: string): void {

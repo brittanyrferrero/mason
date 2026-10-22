@@ -34,7 +34,7 @@ const MEASURE = `(() => {
 const LOOKS_SHIFTED = `(() => {
   if (document.querySelector('.desk')?.hidden) return false
   if ([...document.querySelectorAll('html, body, .app, .desk, .wins, .win, .win *')].some((e) => e.scrollLeft !== 0)) return true
-  return [...document.querySelectorAll('.win')].some((w) => w.offsetParent && w.getBoundingClientRect().left < 14)
+  return [...document.querySelectorAll('.win:not(.expanded)')].some((w) => w.offsetParent && w.getBoundingClientRect().left < 14)
 })()`
 
 async function save(win: BrowserWindow, base: string): Promise<void> {
