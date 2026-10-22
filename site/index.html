@@ -96,21 +96,12 @@ p { margin: 0; text-wrap: pretty; }
 .caption { font-size: 13px; color: var(--muted); padding: 12px 18px 14px; border-top: 1px solid var(--edge); }
 @media (max-width: 520px) { .m-pills { display: none; } .mock-in { padding-inline: 12px; } .m-body { padding-left: 8px; } }
 
-/* Screenshot carousel: swipe or scroll sideways, or use the arrows and pips */
-.shots { gap: 14px; }
-.track { display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; padding: 4px 2px 40px; margin: -4px -2px -26px; }
-.track::-webkit-scrollbar { display: none; }
-.track > .mock { flex: 0 0 100%; scroll-snap-align: center; display: flex; flex-direction: column; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06); }
-.track > .mock .caption { margin-top: auto; }
-.shot-nav { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.arrow { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--edge); background: var(--card); color: var(--ink-soft); display: grid; place-items: center; cursor: pointer; padding: 0; }
-.arrow svg { width: 13px; height: 13px; }
-.arrow:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
-.arrow:disabled { opacity: 0.35; cursor: default; }
-.arrow:focus-visible, .pips button:focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
-.pips { display: flex; gap: 8px; }
-.pips button { width: 7px; height: 7px; border-radius: 50%; border: 0; padding: 0; background: var(--faint); cursor: pointer; }
-.pips button[aria-current="true"] { background: var(--ink); }
+/* The two mockups sit side by side, wider than the reading column; one above the other on narrow screens */
+.shots { --pair: min(1240px, calc(100vw - 40px)); }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-inline: calc((100% - var(--pair)) / 2); }
+.pair > .mock { display: flex; flex-direction: column; min-width: 0; }
+.pair > .mock .caption { margin-top: auto; }
+@media (max-width: 1000px) { .pair { grid-template-columns: 1fr; margin-inline: 0; } }
 
 /* Mock of the Open tab */
 .o-bar { text-align: right; font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
@@ -206,12 +197,12 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
   <header class="hero">
     <div class="mark"><b>m.</b> &nbsp;Mason</div>
     <h1>A home for all your Claude Code&nbsp;sessions</h1>
-    <p>An ADHD-friendly, calm, and organized-by-default replacement for the Claude app. Add persistent notes, rename windows, and easily spin off ideas into new chats. Customize your window view, never miss a session that needs you, and easily quiet everything that you don’t want to pay attention to.</p>
+    <p>An ADHD-friendly, calm, and organized-by-default replacement for the Claude app.<br>Add persistent notes, rename windows, and easily spin off ideas into new chats. Customize your window view, never miss a session that needs you, and easily quiet everything that you don’t want to pay attention to.</p>
     <p>New sessions created in Mason are automatically nested into projects based on their topics, and sessions in a git worktree join their main project.</p>
   </header>
 
-  <section class="ruled shots" aria-roledescription="carousel" aria-label="Screenshots">
-    <div class="track" id="shots">
+  <section class="ruled shots" aria-label="Mockups">
+    <div class="pair">
     <figure class="mock" aria-label="Example of Mason's project list">
       <div class="mock-chrome"><i></i><i></i><i></i></div>
       <div class="mock-in">
@@ -262,11 +253,6 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
       </div>
       <p class="caption">Try the layout menu above. The outlined window is the one you're typing in.</p>
     </figure>
-    </div>
-    <div class="shot-nav">
-      <button type="button" class="arrow" id="shot-prev" aria-label="Previous screenshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l-4 4 4 4"/></svg></button>
-      <span class="pips" id="shot-pips"></span>
-      <button type="button" class="arrow" id="shot-next" aria-label="Next screenshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg></button>
     </div>
   </section>
 
@@ -340,27 +326,6 @@ npm install</pre></li>
     wins.style.setProperty('--cols', cols[sel.value]);
     label.textContent = sel.options[sel.selectedIndex].text;
   });
-})();
-(() => {
-  const track = document.getElementById('shots'), slides = [...track.children], pips = document.getElementById('shot-pips');
-  const prev = document.getElementById('shot-prev'), next = document.getElementById('shot-next');
-  const go = i => track.scrollTo({ left: slides[i].offsetLeft - track.offsetLeft - 2 });
-  const dots = slides.map((_, i) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.setAttribute('aria-label', 'Screenshot ' + (i + 1));
-    b.addEventListener('click', () => go(i));
-    pips.append(b); return b;
-  });
-  let at = 0;
-  const sync = () => {
-    at = Math.round(track.scrollLeft / (slides[1].offsetLeft - slides[0].offsetLeft));
-    dots.forEach((d, i) => d.setAttribute('aria-current', i === at));
-    prev.disabled = at === 0; next.disabled = at === slides.length - 1;
-  };
-  prev.addEventListener('click', () => go(Math.max(0, at - 1)));
-  next.addEventListener('click', () => go(Math.min(slides.length - 1, at + 1)));
-  track.addEventListener('scroll', sync, { passive: true });
-  sync();
 })();
 </script>
 
