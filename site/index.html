@@ -47,7 +47,7 @@ p { margin: 0; text-wrap: pretty; }
 .hero { display: grid; gap: 18px; }
 .hero { container-type: inline-size; }
 .hero h1 { font-size: clamp(40px, 8vw, 58px); line-height: 1.08; font-weight: 300; }
-.hero p { font-size: 18px; color: var(--ink-soft); max-width: 34em; }
+.hero p { font-size: 18px; color: var(--ink-soft); }
 .meta { font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
 
 /* Mock of the Quiet list: mirrors the app's own styles */
@@ -152,7 +152,7 @@ p { margin: 0; text-wrap: pretty; }
 /* Sections */
 /* The intro and the divider under it run wider than the reading column. */
 .col { --wide: min(860px, calc(100vw - 40px)); }
-.hero, .ruled::before { margin-inline: calc((100% - var(--wide)) / 2); }
+.ruled::before { margin-inline: calc((100% - var(--wide)) / 2); }
 .ruled { margin-top: -28px; }
 .ruled::before { content: ""; height: 1px; background: var(--edge); margin-bottom: 26px; }
 section { display: grid; gap: 22px; }
