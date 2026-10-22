@@ -167,17 +167,26 @@ export function peek(name: string): 'trust' | 'shell' | 'starting' {
 
 // Scrolling uses tmux's own history (copy mode), so you can read back everything Claude printed, not just
 // what's on screen. -e drops out of copy mode by itself once you scroll back to the bottom.
+// Except when the window's program draws its own full screen and asks for the mouse (Claude's fullscreen renderer,
+// /tui fullscreen): its history isn't in tmux at all, so the wheel goes to the program, as in any terminal.
 const scrolled = new Set<string>()
 export function scroll(name: string, lines: number): void {
   if (!TMUX || !NAME_RE.test(name) || !Number.isFinite(lines) || !lines) return
-  const run = (args: string[], then?: () => void) => execFile(TMUX!, [...baseArgs(), ...args], { timeout: 5000, env: cleanEnv() }, () => then?.())
+  const run = (args: string[], then?: (out: string) => void) => execFile(TMUX!, [...baseArgs(), ...args], { timeout: 5000, env: cleanEnv(), encoding: 'utf8' }, (_e, out) => then?.(out ?? ''))
   const move = () => run(['send-keys', '-t', name, '-X', '-N', String(Math.min(50, Math.abs(lines | 0) || 1)), lines < 0 ? 'scroll-up' : 'scroll-down'])
-  if (lines > 0) {
-    move()
-    return
-  }
-  scrolled.add(name)
-  run(['copy-mode', '-e', '-t', name], move)
+  run(['display-message', '-p', '-t', name, '#{alternate_on} #{mouse_any_flag} #{mouse_sgr_flag} #{pane_in_mode} #{pane_width} #{pane_height}'], (out) => {
+    const [alt, mouse, sgr, inMode, w, h] = out.trim().split(' ').map(Number)
+    if (alt && mouse && sgr && !inMode) {
+      // SGR mouse wheel events (64 up, 65 down) over the middle of the conversation, one per few lines.
+      const ev = `\x1b[<${lines < 0 ? 64 : 65};${Math.max(1, (w / 2) | 0)};${Math.max(1, (h / 3) | 0)}M`
+      const hex = [...Buffer.from(ev.repeat(Math.min(10, Math.ceil(Math.abs(lines) / 3))))].map((b) => b.toString(16).padStart(2, '0'))
+      run(['send-keys', '-t', name, '-H', ...hex])
+    } else if (lines > 0) move()
+    else {
+      scrolled.add(name)
+      run(['copy-mode', '-e', '-t', name], move)
+    }
+  })
 }
 
 // Dragging a selection past the top or bottom edge: move tmux's cursor, which scrolls the history and grows the
