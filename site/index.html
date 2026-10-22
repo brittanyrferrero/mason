@@ -98,37 +98,51 @@ p { margin: 0; text-wrap: pretty; }
 
 /* The two mockups sit side by side, wider than the reading column; one above the other on narrow screens */
 .shots { --pair: min(1240px, calc(100vw - 40px)); }
-.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-inline: calc((100% - var(--pair)) / 2); }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: stretch; margin-inline: calc((100% - var(--pair)) / 2); }
 .pair > .mock { display: flex; flex-direction: column; min-width: 0; }
 .pair > .mock .caption { margin-top: auto; }
 @media (max-width: 1000px) { .pair { grid-template-columns: 1fr; margin-inline: 0; } }
 
 /* Mock of the Open tab */
-.o-bar { text-align: right; font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+/* The view controls sit in the tab row, beside ?; on a narrow mock they drop under the tabs */
+.o-tabs { flex-wrap: wrap; }
+.o-tabs .m-help { margin-left: 0; }
+.o-bar { margin: 0 0 0 auto; padding: 0 8px 2px; text-align: right; font-size: 12px; color: var(--muted); }
 .o-pick { position: relative; display: inline-flex; align-items: center; gap: 3px; color: var(--ink-soft); font-weight: 500; border-bottom: 1px dotted var(--faint); }
 .o-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
 .o-pick svg { width: 10px; height: 10px; }
 .o-pick:focus-within { outline: 2px solid var(--go); outline-offset: 2px; border-radius: 3px; }
 .wins { display: grid; gap: 8px; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); }
 .wins.one .win:not(.focused) { display: none; }
-.wins.side .win { height: 150px; }
+.wins.side .win { height: 280px; }
+.wins.side .w-bar .chip, .wins.side .w-bar .pen, .wins.side .w-bar .wf { display: none; }
 .o-group { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin: 4px 0 -3px 2px; }
 .o-group:first-child { margin-top: 0; }
 .wins.one .o-group:not(.keep) { display: none; }
-.win { background: #1c1c1e; border-radius: 9px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; height: 132px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 8px 22px rgba(0, 0, 0, 0.14); }
+/* Mirrors the app's Open-tab windows: title · what it's on now, pen, model and mode chips, then the window buttons */
+.win { background: #1c1c1e; border-radius: 9px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; height: 200px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 8px 22px rgba(0, 0, 0, 0.14); }
 .win.focused { box-shadow: 0 0 0 1.5px var(--muted), 0 8px 22px rgba(0, 0, 0, 0.14); }
-.w-bar { height: 26px; flex: none; background: #2c2c2e; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 10px; font-size: 11px; color: #d1d1d6; }
-.w-bar b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.w-bar { height: 26px; flex: none; background: #2c2c2e; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; font-size: 11px; color: #d1d1d6; }
+.win.resting .w-bar { background: #222224; color: #8e8e93; }
+.w-bar b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.w-bar .wf { color: #8e8e93; font-weight: 400; }
 .w-bar .dot { width: 6px; height: 6px; }
-.w-bar .icons { display: flex; gap: 8px; color: #8e8e93; flex: none; }
+.w-bar .pen { color: #8e8e93; opacity: 0.55; flex: none; display: flex; }
+.w-bar .pen svg { width: 9px; height: 9px; }
+.w-bar .chip { flex: none; font-size: 9.5px; color: #8e8e93; border: 1px solid #3a3a3e; border-radius: 999px; padding: 0 6px; line-height: 14px; white-space: nowrap; }
+.w-bar .gap { flex: 1; min-width: 4px; }
+.w-bar .icons { display: flex; align-items: center; gap: 7px; color: #8e8e93; flex: none; }
 .w-bar .icons svg { width: 10px; height: 10px; display: block; }
-.w-ask { color: #d1d1d6; white-space: nowrap; flex: none; display: flex; gap: 4px; align-items: center; }
-.w-ask i { font-style: normal; background: var(--wait); color: #fff; border-radius: 4px; padding: 1px 6px; }
-.w-ask u { text-decoration: none; color: #8e8e93; padding: 1px 4px; }
+.w-bar .icons i { font-style: normal; font-size: 12px; line-height: 1; }
+.w-note { flex: none; display: flex; align-items: baseline; gap: 6px; border-bottom: 1px solid #2c2c2e; background: #232325; color: #c7c7cc; font-size: 10.5px; padding: 4px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-note svg { width: 9px; height: 9px; flex: none; color: #8e8e93; position: relative; top: 1px; }
 .w-term { flex: 1; min-height: 0; overflow: hidden; padding: 7px 10px; font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: #c7c7cc; white-space: pre; }
 .w-term .k { color: #8e8e93; }
 .w-term .a { color: #e8a48f; }
 .w-term .g { color: #7fcf9f; }
+/* A narrow window keeps its title readable: the second chip, focus, and expand step aside */
+.win { container-type: inline-size; }
+@container (max-width: 340px) { .w-bar .chip.opt, .w-bar .icons svg:first-child, .w-bar .icons svg:nth-child(4) { display: none; } }
 @media (max-width: 520px) { .wins { --cols: 1 !important; } .win:nth-of-type(n+4) { display: none; } }
 
 /* Sections */
@@ -156,10 +170,10 @@ code { font-family: var(--mono); font-size: 0.88em; background: var(--card); bor
 .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; font-size: 14.5px; }
 .keys div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--edge); color: var(--ink-soft); }
 
-.stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 18px 24px; }
-.stack div { display: grid; gap: 2px; }
-.stack b { font-weight: 600; font-size: 15px; }
-.stack span { color: var(--muted); font-size: 14px; }
+.built { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 18px 24px; }
+.built div { display: grid; gap: 2px; }
+.built b { font-weight: 600; font-size: 15px; }
+.built span { color: var(--muted); font-size: 14px; }
 
 pre { margin: 0; overflow-x: auto; background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 16px 18px; font-family: var(--mono); font-size: 13px; line-height: 1.7; color: var(--ink-soft); }
 pre .c { color: var(--muted); }
@@ -228,30 +242,37 @@ footer {font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--edge
     <figure class="mock" aria-label="Example of Mason's Open tab">
       <div class="mock-chrome"><i></i><i></i><i></i></div>
       <div class="mock-in">
-        <div class="m-tabs"><span class="m-tab">Projects</span><span class="m-tab on">Open <span class="m-count">4</span></span><span class="m-help">?</span></div>
-        <p class="o-bar">4 sessions from <span class="o-pick">all projects<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span> viewed <label class="o-pick"><span id="o-layout-label">in a grid</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg><select id="o-layout" aria-label="Layout"><option value="grid">in a grid</option><option value="side">side by side</option><option value="stack">stacked</option><option value="one">one at a time</option></select></label> organized <span class="o-pick">by project<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span></p>
+        <div class="m-tabs o-tabs"><span class="m-tab">Projects</span><span class="m-tab on">Open <span class="m-count">4</span></span><p class="o-bar">4 sessions from <span class="o-pick">all projects<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span> viewed <label class="o-pick"><span id="o-layout-label">in a grid</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg><select id="o-layout" aria-label="Layout"><option value="grid">in a grid</option><option value="side">side by side</option><option value="stack">stacked</option><option value="one">one at a time</option></select></label> organized <span class="o-pick">by project<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span></p><span class="m-help">?</span></div>
         <div class="wins" id="o-wins">
           <p class="o-group keep">moonbase-api</p>
-        <div class="win focused"><div class="w-bar"><span class="dot wait"></span><b>Teach the scheduler lunar time</b><span class="w-ask">Allow? <i>Yes</i><u>No</u></span><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Bash(npm test -- --grep "lunar")</span>
+        <div class="win focused"><div class="w-bar"><span class="dot wait"></span><b>Scheduler<span class="wf"> · moon days</span></b><span class="pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span><span class="chip">Opus 5.5</span><span class="gap"></span><span class="icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.3 7.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M12 2v4M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 10h6M8 14h8M8 18h5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><i>–</i><i>×</i></span></div><div class="w-term"><span class="k">● Read(src/calendar/lunar.ts)</span>
+  Found the 24-hour assumption in 3 places.
+<span class="k">● Bash(npm test -- --grep "lunar")</span>
   A moon day is 29.5 Earth days.
-  Should standup still be daily?</div></div>
-        <div class="win"><div class="w-bar"><span class="dot go"></span><b>Oxygen sensor webhooks</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Update(src/webhooks/retry.ts)</span>
+  Make standup monthly instead?
+<span class="a">❯ 1. Yes</span>  2. No</div></div>
+        <div class="win"><div class="w-bar"><b>O₂ sensors<span class="wf"> · retries</span></b><span class="pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span><span class="chip">Sonnet 5.5</span><span class="chip opt">auto</span><span class="gap"></span><span class="icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.3 7.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M12 2v4M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 10h6M8 14h8M8 18h5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><i>–</i><i>×</i></span></div><div class="w-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M12 2v4M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 10h6M8 14h8M8 18h5"/></svg>Ask ops if 6 tries is too polite</div><div class="w-term"><span class="k">● Read(src/webhooks/oxygen.ts)</span>
+  Pings give up after one try today.
+<span class="k">● Update(src/webhooks/retry.ts)</span>
   <span class="g">+ backoff: exponential, max 6 tries</span>
-  No ping drifts off into space.
 <span class="a">* Orbiting… (41s)</span></div></div>
-        <div class="win"><div class="w-bar"><span class="dot "></span><b>Rename the cheese_inventory table</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Wrote migrations/0042_brie.sql</span>
+        <div class="win resting"><div class="w-bar"><b>Cheese table<span class="wf"> · rename</span></b><span class="pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span><span class="chip">Opus 5.5</span><span class="chip opt">plan</span><span class="gap"></span><span class="icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.3 7.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M12 2v4M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 10h6M8 14h8M8 18h5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><i>–</i><i>×</i></span></div><div class="w-term"><span class="k">● Wrote migrations/0042_brie.sql</span>
   Rollback included, just in case.
+<span class="k">● Bash(npm run db:check)</span>
+  <span class="g">✓ 0042_brie.sql looks safe</span>
 
 <span class="k">❯</span> </div></div>
 
           <p class="o-group">burritocopter</p>
-        <div class="win"><div class="w-bar"><span class="dot go"></span><b>Drop zone geofencing</b><span class="icons"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8"/></svg><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 8h9"/></svg><svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></span></div><div class="w-term"><span class="k">● Update(src/flight/landing.ts)</span>
+        <div class="win"><div class="w-bar"><b>Drop zones<span class="wf"> · geofence</span></b><span class="pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></span><span class="chip">Haiku 5.5</span><span class="gap"></span><span class="icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-11.3 7.5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M12 2v4M16 2v4"/><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 10h6M8 14h8M8 18h5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><i>–</i><i>×</i></span></div><div class="w-term"><span class="k">● Read(src/flight/zones.json)</span>
+  12 drop zones, 2 overlap the duck pond.
+<span class="k">● Update(src/flight/landing.ts)</span>
   <span class="g">+ hover 2m above picnic blankets</span>
   No more salsa on the windshield.
 <span class="a">* Wrapping… (12s)</span></div></div>
         </div>
       </div>
-      <p class="caption">Try the layout menu above. The outlined window is the one you're typing in.</p>
+      <p class="caption">Try the layout menu above. Each window shows its model (click to switch) and has buttons to focus, spin off a side thought, keep a note, or expand.</p>
     </figure>
     </div>
   </section>
@@ -299,7 +320,7 @@ npm install</pre></li>
   <section>
     <h2>How it's built</h2>
     <p class="lede">Mason has no network port. It reads what Claude Code already writes to disk and keeps its own data in one SQLite file. The only things that leave your Mac are the short summaries it asks Claude to write (you can turn those off) and a quiet check on GitHub for a newer version.</p>
-    <div class="stack">
+    <div class="built">
       <div><b>Electron</b><span>Desktop shell, menu bar, global hotkeys</span></div>
       <div><b>React</b><span>The Quiet list UI</span></div>
       <div><b>tmux</b><span>A private server keeps sessions alive</span></div>
