@@ -418,9 +418,10 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 /* Experiment: hover-to-type. A window you've rested on is "armed": your next keystroke switches to it. */
 /* Kept quiet on purpose: a faint hairline and a grey hint that fade in, not a highlight. */
 .win.armed { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.45), 0 10px 30px rgba(0, 0, 0, 0.18); }
-.win.armed .win-bar::after { content: 'type to switch'; flex: none; font-size: 11px; color: #e5e5ea; background: rgba(255, 255, 255, 0.1); border-radius: 999px; padding: 1px 8px; margin-left: 8px; animation: armed-in 0.4s ease both; }
+.wins { position: relative; }
+.armed-tag { position: absolute; z-index: 2; transform: translateY(calc(-100% - 2px)); pointer-events: none; font-size: 10.5px; line-height: 14px; color: #e5e5ea; background: #3a3a3c; border-radius: 999px; padding: 0 8px; white-space: nowrap; animation: armed-in 0.4s ease both; }
 @keyframes armed-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .win.armed .win-bar::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .armed-tag { animation: none; } }
 
 /* A newer Claude Code is installed: one quiet line in the tab row, never a notice per window. */
 .tabs .claude-update { align-self: center; margin-left: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // Experiment: rest the pointer on a window in the Open tab for a couple of seconds, then just start typing, and that
 // window becomes the active one, with your first keystroke landing there too. No click needed.
-// To remove it: delete this file and the useHoverToType line (and the `armed` class) in App.tsx.
+// To remove it: delete this file, and in App.tsx the useHoverToType line, the `armed` class, and the armed-tag hint.
 export const HOVER_TO_TYPE = true
 const DWELL_MS = 2000
 

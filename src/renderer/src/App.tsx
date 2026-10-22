@@ -543,6 +543,13 @@ export function App() {
     setFocusHost(host)
     setTick((t) => t + 1)
   })
+  // Its hint sits in the gap just above the window, so nothing in the title bar moves.
+  const winsRef = useRef<HTMLDivElement>(null)
+  const [armedAt, setArmedAt] = useState<{ top: number; right: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = armed ? winsRef.current?.querySelector<HTMLElement>(`.win[data-host="${CSS.escape(armed)}"]`) : null
+    setArmedAt(el ? { top: el.offsetTop, right: el.offsetParent!.clientWidth - el.offsetLeft - el.offsetWidth } : null)
+  }, [armed])
   const resting = (w: (typeof windows)[number]) => !w.needs && !w.working && clock - Math.max(w.last, touched.current.get(w.host) ?? 0) > 10 * 60_000
   // Recent: the window you just clicked away from keeps a faint edge for five minutes, a breadcrumb back to it.
   const [left, setLeft] = useState<Record<string, number>>({})
@@ -948,7 +955,7 @@ export function App() {
 
       {/* Kept mounted (just hidden) so terminals don't reconnect every time you switch tabs. */}
       <section className="desk" hidden={view !== 'open'}>
-        <div className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols, gridTemplateRows: rows }}>
+        <div ref={winsRef} className={`wins ${cols === 1 ? 'col1' : ''} layout-${layout}`} style={{ ['--cols' as string]: cols, gridTemplateRows: rows }}>
           {windows.flatMap((w) => {
             const hidden = only && w.project && w.project !== only
             const focused = focusHost === w.host
@@ -1157,6 +1164,11 @@ export function App() {
               </div>
             ]
           })}
+          {armedAt && (
+            <span className="armed-tag" style={{ top: armedAt.top, right: armedAt.right + 10 }}>
+              type to switch
+            </span>
+          )}
         </div>
       </section>
 
