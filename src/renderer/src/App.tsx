@@ -1118,7 +1118,7 @@ export function App() {
                     <>
                       {n > 1 && big !== w.host && (
                         <button
-                          className={`x spot-x ${spot === w.host ? 'on' : ''}`}
+                          className={`x spot-x focus-x ${spot === w.host ? 'on' : ''}`}
                           type="button"
                           aria-label={spot === w.host ? 'Stop focusing on this window' : 'Focus on this window'}
                           title={spot === w.host ? 'Stop focusing (⌘⇧F)' : 'Focus on this window: the others dim, nothing moves (⌘⇧F)'}
