@@ -418,6 +418,8 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 
 /* The windows' scroll bar runs along Mason's right edge; the windows themselves keep the page margin. */
 .wins.layout-grid, .wins.layout-stack { margin-right: -20px; padding-right: 20px; }
+/* A few pixels of room on the left and top too, so the focused window's ring isn't clipped by the scrolling area. */
+.wins.layout-grid, .wins.layout-stack { margin-left: -3px; padding-left: 3px; margin-top: -3px; padding-top: 3px; }
 
 /* Experiment: hover-to-type. A window you've rested on is "armed": your next keystroke switches to it. */
 /* Kept quiet on purpose: a faint hairline and a grey hint that fade in, not a highlight. */
