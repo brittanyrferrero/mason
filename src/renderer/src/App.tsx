@@ -223,6 +223,21 @@ export function App() {
   // Peek: a session enlarged over the list, live, so you can answer it without leaving Projects.
   const [renamingHost, setRenamingHost] = useState<string | null>(null)
   const [updateOpen, setUpdateOpen] = useState(false)
+  // "Update now" for Claude: which session of how many is restarting right now.
+  const [claudeUpdating, setClaudeUpdating] = useState<{ done: number; total: number } | null>(null)
+  useEffect(() => window.mason.onUpdateProgress((done, total) => setClaudeUpdating({ done, total })), [])
+  const updateClaudeNow = async () => {
+    setClaudeUpdating({ done: 0, total: 0 })
+    const r = await window.mason.updateClaudeNow()
+    setClaudeUpdating(null)
+    if (!r) return flashNote({ text: 'Mason is already moving sessions over. Try again in a moment.', tone: 'muted' })
+    const parts = [
+      r.updated ? `${r.updated} session${r.updated > 1 ? 's' : ''} now on the new Claude` : 'No sessions were ready to update',
+      r.busy ? `${r.busy} busy or waiting on you, so they'll catch up later` : '',
+      r.failed ? `${r.failed} couldn't restart; open ${r.failed > 1 ? 'them' : 'it'} to check` : ''
+    ].filter(Boolean)
+    flashNote({ text: parts.join(' · '), tone: r.failed ? 'muted' : 'ok' })
+  }
   const [updating, setUpdating] = useState(false)
   const [peeking, setPeeking] = useState<{ host: string; id: string } | null>(null)
   const [foot, setFoot] = useState<'paused' | 'saved' | 'done' | 'scratch' | null>(null)
@@ -859,10 +874,21 @@ export function App() {
               }
             >
               new Claude ·{' '}
-              {state.claudeAuto && state.claudeUpdate.behindHere
-                ? `${state.claudeUpdate.behindHere} switch over when idle`
-                : `${state.claudeUpdate.behindHere + state.claudeUpdate.behindTerminal} to restart`}
-              {state.claudeAuto && state.claudeUpdate.behindTerminal ? ` · ${state.claudeUpdate.behindTerminal} in Terminal` : ''}
+              {claudeUpdating ? (
+                claudeUpdating.total ? `updating ${claudeUpdating.done + 1} of ${claudeUpdating.total}…` : 'updating…'
+              ) : state.claudeUpdate.behindHere ? (
+                <button
+                  className="claude-update-now"
+                  type="button"
+                  onClick={updateClaudeNow}
+                  title="Restart every session in Mason that isn't busy onto the new Claude now. Each keeps its conversation, its model, and anything typed in its prompt. Busy ones catch up later."
+                >
+                  Update {state.claudeUpdate.behindHere} now
+                </button>
+              ) : (
+                `${state.claudeUpdate.behindTerminal} to restart`
+              )}
+              {state.claudeUpdate.behindHere && state.claudeUpdate.behindTerminal ? ` · ${state.claudeUpdate.behindTerminal} in Terminal` : ''}
             </span>
           )}
           {state?.update && (

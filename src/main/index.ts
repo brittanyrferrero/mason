@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { watchDebugRequests } from './debugSnapshot'
-import { autoUpdateOn, modelOf, noteTyping, restartSession, startClaudeUpdater, updateView } from './claudeUpdates'
+import { autoUpdateOn, modelOf, noteTyping, restartSession, startClaudeUpdater, updateNow, updateView } from './claudeUpdates'
 import { existsSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs'
 import { LAST_COPY } from './copyUnwrap'
 import { homedir } from 'node:os'
@@ -643,6 +643,12 @@ app.whenReady().then(() => {
     setWorktrees(db, on)
     pushState()
     return true
+  })
+  ipcMain.handle('claude:updateNow', async (e) => {
+    if (!trusted(e)) return null
+    const r = await updateNow(db, readLive, readEvents, (done, total) => send('claude:updateProgress', done, total))
+    refreshSoon(false)
+    return r
   })
   ipcMain.handle('claudeAuto:set', (e, on: unknown) => {
     if (!trusted(e) || typeof on !== 'boolean') return false

@@ -441,3 +441,7 @@ summary:hover .proj-rename, .proj-rename:focus-visible { opacity: 1; }
 .model-chip.switchable { cursor: pointer; }
 .model-chip.switchable:hover { color: #f2f2f7; border-color: rgba(255, 255, 255, 0.3); }
 .model-chip select { position: absolute; inset: 0; opacity: 0; cursor: pointer; font: inherit; }
+
+/* "Update N now" inside the quiet new-Claude line: a link-like button, nothing louder. */
+.claude-update-now { border: 0; background: none; padding: 0; color: var(--ink); font-size: 12px; text-decoration: underline; text-decoration-color: var(--edge); text-underline-offset: 3px; }
+.claude-update-now:hover { text-decoration-color: var(--ink); }

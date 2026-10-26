@@ -154,6 +154,38 @@ export function behind(live: Map<string, LiveInfo>): { latest: string | null; he
   return { latest, here, terminal }
 }
 
+// "Update now": restart every session inside Mason that's on an older Claude and isn't busy, right away.
+// You asked for it, so a draft in the prompt is kept and put back (the automatic restarts leave those alone).
+// Sessions that are working or waiting on you are left to catch up later. One at a time, never alongside the
+// background loop.
+export async function updateNow(
+  db: DB,
+  readLive: () => Map<string, LiveInfo>,
+  needs: () => Map<string, Need>,
+  progress: (done: number, total: number) => void
+): Promise<{ updated: number; failed: number; busy: number } | null> {
+  if (busy) return null
+  busy = true
+  try {
+    const here = behind(readLive()).here
+    const ready = here.filter(([sid, l]) => l.status === 'idle' && !needs().has(sid))
+    let updated = 0
+    let failed = 0
+    for (const [i, [sid, l, name]] of ready.entries()) {
+      progress(i, ready.length)
+      // Look again: it may have started working since the click.
+      const now = readLive().get(sid)
+      if (!now || now.pid !== l.pid || now.status !== 'idle' || needs().has(sid)) continue
+      const r = await restartSession(name, sid, l.pid, readLive, { model: modelOf(db, sid), keepDraft: true })
+      if (r === 'restarted' || r === 'restarted-draft') updated++
+      else failed++
+    }
+    return { updated, failed, busy: here.length - ready.length }
+  } finally {
+    busy = false
+  }
+}
+
 export function updateView(live: Map<string, LiveInfo>): ClaudeUpdateView {
   const b = behind(live)
   return b.latest && (b.here.length || b.terminal) ? { latest: b.latest, behindHere: b.here.length, behindTerminal: b.terminal } : null

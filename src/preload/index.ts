@@ -37,6 +37,12 @@ const api = {
   setWorktrees: (on: boolean): Promise<boolean> => ipcRenderer.invoke('worktrees:set', on),
   setNotify: (on: boolean): Promise<boolean> => ipcRenderer.invoke('notify:set', on),
   setClaudeAuto: (on: boolean): Promise<boolean> => ipcRenderer.invoke('claudeAuto:set', on),
+  updateClaudeNow: (): Promise<{ updated: number; failed: number; busy: number } | null> => ipcRenderer.invoke('claude:updateNow'),
+  onUpdateProgress: (cb: (done: number, total: number) => void) => {
+    const listener = (_e: IpcRendererEvent, done: number, total: number) => cb(done, total)
+    ipcRenderer.on('claude:updateProgress', listener)
+    return () => ipcRenderer.removeListener('claude:updateProgress', listener)
+  },
   setModel: (id: string, model: string): Promise<{ ok?: boolean; error?: string }> => ipcRenderer.invoke('session:model', id, model),
   spinoff: (fromHost: string, thought: string): Promise<HostResult> => ipcRenderer.invoke('session:spinoff', fromHost, thought),
   lastCopy: (): Promise<{ text: string; at: number } | null> => ipcRenderer.invoke('copy:last'),
