@@ -335,6 +335,31 @@ app.whenReady().then(() => {
   writeSpinoffCommand()
   ipcMain.handle('state:get', (e) => (trusted(e) ? state() : null))
 
+  // The Open tab's windows, kept in Mason's database so nothing in the window itself can lose them.
+  // null means never saved here yet (the window then hands over what it kept itself, once).
+  const setting = (k: string) => (db.prepare('SELECT value FROM settings WHERE key = ?').get(k) as { value: string } | undefined)?.value
+  const putSetting = (k: string, v: string) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, v)
+  let windowsAskedAt = 0
+  ipcMain.handle('windows:get', (e) => {
+    if (!trusted(e)) return null
+    windowsAskedAt = Date.now() // the window just (re)loaded
+    const v = setting('openWindows')
+    return v ? JSON.parse(v) : null
+  })
+  ipcMain.handle('windows:set', (e, list: unknown) => {
+    if (!trusted(e) || !Array.isArray(list) || list.length > 200) return false
+    const clean = list.filter(
+      (w): w is { host: string; sid: string | null } =>
+        !!w && typeof w.host === 'string' && NAME_RE.test(w.host) && (w.sid === null || (typeof w.sid === 'string' && SESSION_ID_RE.test(w.sid)))
+    ).map((w) => ({ host: w.host, sid: w.sid }))
+    const before = setting('openWindows')
+    // Just after the window loads, an empty list over a full one is almost certainly a hiccup, not you closing
+    // everything in that minute: keep the full one.
+    if (!clean.length && before && before !== '[]' && Date.now() - windowsAskedAt < 60_000) return false
+    putSetting('openWindows', JSON.stringify(clean))
+    return true
+  })
+
   // Open: a session inside Mason opens in the Open tab; one in a Terminal window gets brought to the front.
   // Which Mason shell a running copy is in: Claude's own record of its tmux pane, else matching the terminal.
   const hostFor = (c: { tty?: string; tmux?: string }): string | undefined => {

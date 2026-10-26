@@ -308,16 +308,30 @@ export function App() {
   const restored = useRef(false)
   const mounted = useRef(Date.now())
   const restoring = useRef(false) // windows were just restored but haven't landed yet: don't save an empty list over them
+  // The saved windows live in Mason's database. The first time, this window hands over the list it kept itself.
+  const savedWindows = useRef<SavedWindow[] | null>(null)
+  const [windowsLoaded, setWindowsLoaded] = useState(false)
+  useEffect(() => {
+    window.mason.getWindows().then((list) => {
+      if (!list) {
+        try {
+          list = JSON.parse(localStorage.getItem('openWindows') ?? '[]') as SavedWindow[]
+        } catch {
+          list = []
+        }
+        if (list.length) window.mason.setWindows(list)
+      }
+      savedWindows.current = list
+      setWindowsLoaded(true)
+    })
+  }, [])
   const convOf = (h: string) => {
     const s = allSessions.find((x) => x.s.host === h)?.s
     return s ? (s.sid ?? (s.id.startsWith('tmux:') ? null : s.id)) : null
   }
   useEffect(() => {
-    if (restored.current || !state) return
-    let saved: SavedWindow[] = []
-    try {
-      saved = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
-    } catch {}
+    if (restored.current || !state || !windowsLoaded) return
+    const saved = savedWindows.current ?? []
     const alive = new Set(hosted.map(({ s }) => s.host!))
     const hostOfConv = new Map(hosted.flatMap(({ s }) => (s.sid ?? s.id).startsWith('tmux:') ? [] : [[s.sid ?? s.id, s.host!] as const]))
     const now = new Map<string, string>() // saved name -> today's name
@@ -337,17 +351,17 @@ export function App() {
     const f = stored('openFocus', '')
     setFocusHost(now.get(f) ?? hosts[0])
     if (stored('openView', 'projects') === 'open') setView('open')
-  }, [state])
+  }, [state, windowsLoaded])
   useEffect(() => {
     if (!restored.current) return
     if (restoring.current && !openHosts.length) return
     restoring.current = false
-    let prev: SavedWindow[] = []
-    try {
-      prev = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
-    } catch {}
+    const prev = savedWindows.current ?? []
     // A window still starting has no conversation yet; keep the one saved before rather than forgetting it.
-    store('openWindows', JSON.stringify(openHosts.map((h) => ({ host: h, sid: convOf(h) ?? prev.find((w) => w.host === h)?.sid ?? null }))))
+    const list = openHosts.map((h) => ({ host: h, sid: convOf(h) ?? prev.find((w) => w.host === h)?.sid ?? null }))
+    if (JSON.stringify(list) === JSON.stringify(prev)) return
+    savedWindows.current = list
+    window.mason.setWindows(list)
   }, [openHosts, allSessions])
   useEffect(() => {
     if (restored.current) store('openFocus', focusHost ?? '')

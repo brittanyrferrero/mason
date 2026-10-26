@@ -6,6 +6,8 @@ type HostResult = { host?: string; ok?: boolean; error?: string }
 // The whole surface the page gets. Every call names one specific action; there is no generic "run" channel.
 const api = {
   getState: () => ipcRenderer.invoke('state:get'),
+  getWindows: (): Promise<{ host: string; sid: string | null }[] | null> => ipcRenderer.invoke('windows:get'),
+  setWindows: (list: { host: string; sid: string | null }[]): Promise<boolean> => ipcRenderer.invoke('windows:set', list),
   // Where a file dropped on a terminal lives on disk (Electron no longer puts this on File objects).
   pathFor: (file: File): string => webUtils.getPathForFile(file),
   onState: (cb: (state: unknown) => void) => {
