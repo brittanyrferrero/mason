@@ -594,6 +594,13 @@ export function App() {
   })
   // Its hint sits in the gap just above the window, so nothing in the title bar moves.
   const winsRef = useRef<HTMLDivElement>(null)
+  // Mason's width, for how many grid columns fit.
+  const [viewW, setViewW] = useState(() => window.innerWidth)
+  useEffect(() => {
+    const onResize = () => setViewW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [armedAt, setArmedAt] = useState<{ top: number; right: number } | null>(null)
   useLayoutEffect(() => {
     const el = armed ? winsRef.current?.querySelector<HTMLElement>(`.win[data-host="${CSS.escape(armed)}"]`) : null
@@ -661,7 +668,10 @@ export function App() {
   }, [focusHost])
   const unfolded = groups.filter((g) => !isFolded(g.project))
   const widest = grouped ? Math.max(1, ...unfolded.map((g) => g.hosts.length)) : n
-  const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, widest) : widest <= 1 ? 1 : widest === 2 || widest === 4 ? 2 : 3
+  // In a grid: 3 columns, unless Mason is too narrow for them (a column needs about 420px, roughly 60 characters of
+  // Claude's text), and never more columns than there are windows to fill them.
+  const fits = Math.max(1, Math.min(3, Math.floor((viewW - 40) / 420)))
+  const cols = one || layout === 'stack' ? 1 : layout === 'side' ? Math.max(1, widest) : Math.max(1, Math.min(fits, widest))
   const rows = grouped ? groups.map((g) => (isFolded(g.project) ? 'auto' : `auto repeat(${Math.ceil(g.hosts.length / cols)}, var(--row))`)).join(' ') : undefined
   const headingFor = new Map(grouped ? groups.map((g) => [g.hosts[0], g]) : [])
 
