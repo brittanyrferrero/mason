@@ -306,13 +306,14 @@ export function App() {
   // the conversation it shows, so after a Mac restart (when Mason reopens them under new names) they still match.
   type SavedWindow = { host: string; sid: string | null }
   const restored = useRef(false)
+  const mounted = useRef(Date.now())
+  const restoring = useRef(false) // windows were just restored but haven't landed yet: don't save an empty list over them
   const convOf = (h: string) => {
     const s = allSessions.find((x) => x.s.host === h)?.s
     return s ? (s.sid ?? (s.id.startsWith('tmux:') ? null : s.id)) : null
   }
   useEffect(() => {
     if (restored.current || !state) return
-    restored.current = true
     let saved: SavedWindow[] = []
     try {
       saved = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
@@ -325,8 +326,13 @@ export function App() {
       if (h) now.set(w.host, h)
     }
     const hosts = [...new Set(now.values())]
+    // Nothing matched yet: the first updates can arrive before Mason has listed its sessions. Keep the saved list and
+    // try again with the next update; only after half a minute does an unmatched list count as gone.
+    if (!hosts.length && saved.length && Date.now() - mounted.current < 30_000) return
+    restored.current = true
     if (!hosts.length) return
-    setOpenHosts(hosts)
+    restoring.current = true
+    setOpenHosts((hs) => [...new Set([...hosts, ...hs])]) // plus any you opened while it waited
     setOrder((o) => o.map((h) => now.get(h) ?? h))
     const f = stored('openFocus', '')
     setFocusHost(now.get(f) ?? hosts[0])
@@ -334,6 +340,8 @@ export function App() {
   }, [state])
   useEffect(() => {
     if (!restored.current) return
+    if (restoring.current && !openHosts.length) return
+    restoring.current = false
     let prev: SavedWindow[] = []
     try {
       prev = JSON.parse(localStorage.getItem('openWindows') ?? '[]')
