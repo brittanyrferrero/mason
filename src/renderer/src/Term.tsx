@@ -70,16 +70,9 @@ export function Term({
       }
     }
     host.addEventListener('wheel', onWheel, { capture: true, passive: false })
-    // A terminal can only paste text, so ⌘V with a screenshot on the clipboard would do nothing. Claude Code reads
-    // images from the clipboard itself on Ctrl+V, so that's what an image-only paste sends instead.
-    const onPaste = (e: ClipboardEvent) => {
-      const c = e.clipboardData
-      if (!c || c.getData('text/plain') || ![...c.items].some((i) => i.type.startsWith('image/'))) return
-      e.preventDefault()
-      e.stopPropagation()
-      window.mason.input(client, '\x16')
-    }
-    host.addEventListener('paste', onPaste, true)
+    // ⌘V with a screenshot on the clipboard: Mason hands the window you're typing in Claude's own Ctrl+V, which
+    // reads the image from the clipboard (see before-input-event in the main process).
+    const offPasteImage = window.mason.onPasteImage(() => host.contains(document.activeElement) && window.mason.input(client, '\x16'))
     // Dragging selects text, and tmux does the selecting so it can run back through the history. Held past the top
     // or bottom edge, the view keeps scrolling. Letting go copies; a small "Copied" shows so you know it worked.
     let drag: { moved: boolean; dir: number; timer: number; speed: number } | null = null
@@ -189,7 +182,7 @@ export function Term({
     return () => {
       ro.disconnect()
       host.removeEventListener('wheel', onWheel, { capture: true })
-      host.removeEventListener('paste', onPaste, true)
+      offPasteImage()
       host.removeEventListener('mousedown', onDown, true)
       document.removeEventListener('mousemove', onMove, true)
       document.removeEventListener('mouseup', onUp, true)

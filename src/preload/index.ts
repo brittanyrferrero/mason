@@ -92,6 +92,11 @@ const api = {
     ipcRenderer.on('term:data', listener)
     return () => ipcRenderer.removeListener('term:data', listener)
   },
+  onPasteImage: (cb: () => void) => {
+    const listener = () => cb()
+    ipcRenderer.on('term:paste-image', listener)
+    return () => ipcRenderer.removeListener('term:paste-image', listener)
+  },
   onTermExit: (cb: (name: string) => void) => {
     const listener = (_e: IpcRendererEvent, name: string) => cb(name)
     ipcRenderer.on('term:exit', listener)

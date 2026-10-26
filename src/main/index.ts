@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, nativeImage, nativeTheme, session, Tray, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { watchDebugRequests } from './debugSnapshot'
 import { autoUpdateOn, modelOf, noteTyping, restartSession, startClaudeUpdater, updateView } from './claudeUpdates'
 import { existsSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs'
@@ -254,6 +254,16 @@ function createWindow(): void {
       webSecurity: true,
       spellcheck: false
     }
+  })
+  // ⌘V with only an image on the clipboard (a screenshot): a terminal can't paste that, and the page never sees a
+  // paste it could act on. Claude Code reads images from the clipboard itself on Ctrl+V, so the focused window
+  // gets that instead.
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown' || input.code !== 'KeyV' || !input.meta || input.shift || input.alt || input.control) return
+    const cb = clipboard as unknown as { readText(): string; availableFormats(): string[] } // (the DOM's Clipboard type shadows Electron's here)
+    if (cb.readText() || !cb.availableFormats().some((f) => f.startsWith('image/'))) return
+    e.preventDefault()
+    win?.webContents.send('term:paste-image')
   })
   // Developer check: render off-screen to a PNG and exit (`--snapshot=out.png`, optional `--theme=dark`).
   const snap = process.argv.find((a) => a.startsWith('--snapshot='))?.split('=')[1]
